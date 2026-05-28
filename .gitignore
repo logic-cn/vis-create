@@ -104,3 +104,16 @@ __pycache__/
 .env.local
 .env.production
 .env.staging
+
+# Node.js
+node_modules/
+gui/node_modules/
+gui/dist/
+
+# Rust/Cargo
+gui/src-tauri/target/
+
+# Tauri
+gui/src-tauri/icons/*.png
+gui/src-tauri/icons/*.ico
+gui/src-tauri/icons/*.icns
