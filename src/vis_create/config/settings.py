@@ -47,6 +47,28 @@ class Settings(BaseModel):
         description="Stability AI API密钥",
     )
 
+    # 数据库配置
+    db_host: str = Field(
+        default_factory=lambda: os.getenv("DB_HOST", "localhost"),
+        description="数据库主机",
+    )
+    db_port: int = Field(
+        default_factory=lambda: int(os.getenv("DB_PORT", "5432")),
+        description="数据库端口",
+    )
+    db_name: str = Field(
+        default_factory=lambda: os.getenv("DB_NAME", "vis-create"),
+        description="数据库名称",
+    )
+    db_user: str = Field(
+        default_factory=lambda: os.getenv("DB_USER", "postgres"),
+        description="数据库用户",
+    )
+    db_password: str = Field(
+        default_factory=lambda: os.getenv("DB_PASSWORD", ""),
+        description="数据库密码",
+    )
+
     # 应用配置
     output_dir: str = Field(
         default_factory=lambda: os.getenv("OUTPUT_DIR", "./output"),
