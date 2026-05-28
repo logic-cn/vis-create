@@ -1,9 +1,11 @@
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useArtworkStore } from "../stores/artworkStore";
 import { artworkService } from "../services/artworkService";
 import ArtworkCard from "../components/gallery/ArtworkCard";
 
 export default function GalleryPage() {
+  const navigate = useNavigate();
   const { artworks, isLoading, setArtworks, setLoading, setError } =
     useArtworkStore();
 
@@ -32,7 +34,9 @@ export default function GalleryPage() {
             共 {artworks.length} 个作品
           </p>
         </div>
-        <button className="btn-primary">+ 新建创作</button>
+        <button className="btn-primary" onClick={() => navigate("/create")}>
+          + 新建创作
+        </button>
       </div>
 
       {isLoading ? (

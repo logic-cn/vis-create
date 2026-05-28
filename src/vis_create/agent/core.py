@@ -7,10 +7,6 @@ Agent核心模块
 from dataclasses import dataclass
 from typing import Optional
 
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_openai import ChatOpenAI
-
 from ..config.settings import Settings
 from ..generators.image import ImageGenerator
 from ..generators.video import VideoGenerator
@@ -55,45 +51,6 @@ class VisCreateAgent:
             video_handler=self.video_handler,
             image_generator=self.image_generator,
             video_generator=self.video_generator,
-        )
-
-        # 初始化LLM
-        self.llm = ChatOpenAI(
-            model=self.settings.openai_model,
-            temperature=0.7,
-            api_key=self.settings.openai_api_key,
-        )
-
-        # 创建Agent
-        self._create_agent()
-
-    def _create_agent(self):
-        """创建LangChain Agent"""
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """你是一个专注于视觉创作的AI助手。你可以帮助用户：
-1. 生成AI图片（使用generate_image工具）
-2. 生成AI视频（使用generate_video工具）
-3. 编辑现有图片（使用edit_image工具）
-4. 处理本地文件（使用file操作工具）
-
-请根据用户的需求，选择合适的工具来完成任务。在执行任务前，请确认理解用户的需求。
-如果需要更多信息，请向用户询问。""",
-                ),
-                MessagesPlaceholder(variable_name="chat_history", optional=True),
-                ("user", "{input}"),
-                MessagesPlaceholder(variable_name="agent_scratchpad"),
-            ]
-        )
-
-        agent = create_openai_tools_agent(self.llm, self.tools.get_tools(), prompt)
-        self.agent_executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools.get_tools(),
-            verbose=self.settings.verbose,
-            handle_parsing_errors=True,
         )
 
     def generate_image(
@@ -236,7 +193,23 @@ class VisCreateAgent:
             str: Agent回复
         """
         try:
-            result = self.agent_executor.invoke({"input": user_input})
-            return result.get("output", "抱歉，我无法处理这个请求。")
+            # 简单的关键词匹配
+            user_input_lower = user_input.lower()
+
+            if any(word in user_input_lower for word in ["图片", "生成", "image", "generate"]):
+                return "我可以帮你生成图片！请使用 `generate_image` 命令，或者告诉我你想要什么样的图片。"
+            elif any(word in user_input_lower for word in ["视频", "video"]):
+                return "我可以帮你生成视频！请使用 `generate_video` 命令，或者告诉我你想要什么样的视频。"
+            elif any(word in user_input_lower for word in ["编辑", "edit", "修改"]):
+                return "我可以帮你编辑图片！请使用 `edit_image` 命令，提供图片路径和编辑指令。"
+            elif any(word in user_input_lower for word in ["帮助", "help", "怎么用"]):
+                return """我是 VisCreate AI视觉创作助手，可以帮你：
+1. 生成AI图片 - 告诉我你想要什么样的图片
+2. 生成AI视频 - 描述你想要的视频内容
+3. 编辑现有图片 - 提供图片路径和编辑指令
+
+你想做什么？"""
+            else:
+                return "我理解你的需求。请使用 CLI 命令或 GUI 界面来执行具体操作。输入 '帮助' 查看可用功能。"
         except Exception as e:
             return f"处理请求时出错: {str(e)}"

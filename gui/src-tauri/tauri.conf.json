@@ -9,7 +9,6 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "title": "VisCreate",
     "windows": [
       {
         "title": "VisCreate - AI视觉创作Agent",

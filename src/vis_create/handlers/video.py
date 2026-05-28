@@ -7,7 +7,10 @@
 import os
 from typing import Any, Dict, List, Optional
 
-from moviepy.editor import VideoFileClip
+try:
+    from moviepy.editor import VideoFileClip
+except ImportError:
+    from moviepy import VideoFileClip
 
 
 class VideoHandler:
