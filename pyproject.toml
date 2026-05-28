@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vis-create"
+version = "0.1.0"
+description = "AI视觉创作Agent - 专注于AI图片生成和视频生成的本地Agent产品"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "logic-cn", email = "logic@example.com" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "langchain>=0.1.0",
+    "langchain-openai>=0.0.5",
+    "langchain-anthropic>=0.1.0",
+    "pillow>=10.0.0",
+    "moviepy>=1.0.3",
+    "httpx>=0.25.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "aiofiles>=23.0.0",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+
+[project.scripts]
+vis-create = "vis_create.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vis_create"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "py311"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
