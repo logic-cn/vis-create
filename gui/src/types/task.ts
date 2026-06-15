@@ -1,4 +1,9 @@
-export type TaskStatus = "pending" | "processing" | "completed" | "failed" | "paused";
+export type TaskStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "paused";
 
 export interface Task {
   id: string;
@@ -23,6 +28,7 @@ export interface TaskCreateParams {
   type: "image" | "video";
   prompt: string;
   parameters?: Record<string, unknown>;
+  project_id?: string;
 }
 
 export interface TaskProgressEvent {

@@ -1,5 +1,6 @@
 export interface Artwork {
   id: string;
+  project_id?: string;
   title: string;
   description?: string;
   type: "image" | "video";

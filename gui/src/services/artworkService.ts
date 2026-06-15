@@ -1,5 +1,10 @@
 import { api } from "./api";
-import { Artwork, ArtworkListResponse, ArtworkCreateParams, ArtworkFilters } from "../types/artwork";
+import {
+  Artwork,
+  ArtworkListResponse,
+  ArtworkCreateParams,
+  ArtworkFilters,
+} from "../types/artwork";
 
 export const artworkService = {
   list: (page = 1, limit = 20, filters?: ArtworkFilters) => {

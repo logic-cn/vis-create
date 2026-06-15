@@ -12,7 +12,11 @@ interface TaskStore {
   addTask: (task: Task) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   removeTask: (id: string) => void;
-  updateTaskProgress: (id: string, progress: number, status?: TaskStatus) => void;
+  updateTaskProgress: (
+    id: string,
+    progress: number,
+    status?: TaskStatus,
+  ) => void;
 }
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
@@ -36,7 +40,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   updateTaskProgress: (id, progress, status) => {
     const { tasks } = get();
     const updated = tasks.map((t) =>
-      t.id === id ? { ...t, progress, ...(status && { status }) } : t
+      t.id === id ? { ...t, progress, ...(status && { status }) } : t,
     );
     set({ tasks: updated });
   },

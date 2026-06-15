@@ -26,6 +26,10 @@ def list_artworks(
     limit: int = Query(20, ge=1, le=100),
     type: Optional[str] = Query(None, pattern="^(image|video)$"),
     style: Optional[str] = None,
+    project_id: Optional[str] = Query(None, description="按项目ID筛选"),
+    character_id: Optional[str] = Query(None, description="按角色ID筛选"),
+    chapter_id: Optional[str] = Query(None, description="按章节ID筛选"),
+    scene_id: Optional[str] = Query(None, description="按场景ID筛选"),
     sort: str = Query("created_at", pattern="^(created_at|title|is_favorite)$"),
     search: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -38,6 +42,14 @@ def list_artworks(
         query = query.filter(Artwork.type == type)
     if style:
         query = query.filter(Artwork.style == style)
+    if project_id:
+        query = query.filter(Artwork.project_id == uuid.UUID(project_id))
+    if character_id:
+        query = query.filter(Artwork.character_id == uuid.UUID(character_id))
+    if chapter_id:
+        query = query.filter(Artwork.chapter_id == uuid.UUID(chapter_id))
+    if scene_id:
+        query = query.filter(Artwork.scene_id == uuid.UUID(scene_id))
     if search:
         query = query.filter(
             Artwork.title.ilike(f"%{search}%") | Artwork.prompt.ilike(f"%{search}%")
@@ -56,7 +68,7 @@ def list_artworks(
     artworks = query.offset((page - 1) * limit).limit(limit).all()
 
     return ArtworkListResponse(
-        data=[ArtworkResponse.from_orm(a) for a in artworks],
+        data=[ArtworkResponse.model_validate(a) for a in artworks],
         total=total,
         page=page,
         limit=limit,
@@ -69,7 +81,7 @@ def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
     artwork = db.query(Artwork).filter(Artwork.id == uuid.UUID(artwork_id)).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
-    return ArtworkResponse.from_orm(artwork)
+    return ArtworkResponse.model_validate(artwork)
 
 
 @router.post("", response_model=ArtworkResponse, status_code=201)
@@ -88,25 +100,23 @@ def create_artwork(data: ArtworkCreate, db: Session = Depends(get_db)):
     db.add(artwork)
     db.commit()
     db.refresh(artwork)
-    return ArtworkResponse.from_orm(artwork)
+    return ArtworkResponse.model_validate(artwork)
 
 
 @router.put("/{artwork_id}", response_model=ArtworkResponse)
-def update_artwork(
-    artwork_id: str, data: ArtworkUpdate, db: Session = Depends(get_db)
-):
+def update_artwork(artwork_id: str, data: ArtworkUpdate, db: Session = Depends(get_db)):
     """更新作品信息"""
     artwork = db.query(Artwork).filter(Artwork.id == uuid.UUID(artwork_id)).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
-    update_data = data.dict(exclude_unset=True)
+    update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(artwork, key, value)
 
     db.commit()
     db.refresh(artwork)
-    return ArtworkResponse.from_orm(artwork)
+    return ArtworkResponse.model_validate(artwork)
 
 
 @router.delete("/{artwork_id}", status_code=204)
@@ -130,4 +140,4 @@ def toggle_favorite(artwork_id: str, db: Session = Depends(get_db)):
     artwork.is_favorite = not artwork.is_favorite
     db.commit()
     db.refresh(artwork)
-    return ArtworkResponse.from_orm(artwork)
+    return ArtworkResponse.model_validate(artwork)

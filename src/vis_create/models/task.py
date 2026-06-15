@@ -5,14 +5,24 @@
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, Field
-from sqlalchemy import Column, DateTime, Enum as SQLEnum, Float, ForeignKey, JSON, String, Text
+from pydantic import BaseModel, BeforeValidator, Field
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Enum as SQLEnum,
+    Float,
+    ForeignKey,
+    JSON,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
 from ..database.connection import Base
+from .creation_params import CreationParameters
 
 
 class TaskStatus(str, Enum):
@@ -33,9 +43,14 @@ class Task(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     artwork_id = Column(UUID(as_uuid=True), ForeignKey("artworks.id"), nullable=True)
+    project_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     type = Column(SQLEnum("image", "video", name="task_type"), nullable=False)
     status = Column(
-        SQLEnum(TaskStatus, name="task_status"),
+        SQLEnum(
+            TaskStatus,
+            name="task_status",
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
         default=TaskStatus.PENDING,
         nullable=False,
     )
@@ -54,14 +69,24 @@ class TaskCreate(BaseModel):
 
     type: str = Field(..., pattern="^(image|video)$")
     prompt: str = Field(..., min_length=1)
-    parameters: Optional[dict] = None
+    parameters: Optional[CreationParameters] = None
+    project_id: Optional[str] = None
+
+
+def _uuid_to_str(v: object) -> str:
+    return str(v) if isinstance(v, uuid.UUID) else v
+
+
+def _optional_uuid_to_str(v: object) -> Optional[str]:
+    return str(v) if isinstance(v, uuid.UUID) else v
 
 
 class TaskResponse(BaseModel):
     """任务响应"""
 
-    id: str
-    artwork_id: Optional[str]
+    id: Annotated[str, BeforeValidator(_uuid_to_str)]
+    artwork_id: Annotated[Optional[str], BeforeValidator(_optional_uuid_to_str)]
+    project_id: Annotated[Optional[str], BeforeValidator(_optional_uuid_to_str)]
     type: str
     status: TaskStatus
     progress: float
@@ -72,8 +97,7 @@ class TaskResponse(BaseModel):
     completed_at: Optional[datetime]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class TaskListResponse(BaseModel):

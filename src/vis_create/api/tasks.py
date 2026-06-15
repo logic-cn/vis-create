@@ -2,15 +2,27 @@
 任务API路由
 """
 
+import json
+import os
 import uuid
 import asyncio
+import logging
 from typing import Generator
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from ..database.connection import get_db
+from ..config.settings import Settings
+from ..database.connection import get_db, get_session_factory
+from ..generators.comfyui import ComfyUIGenerator
+from ..generators.image import ImageGenerator
+from ..models.artwork import Artwork
+from ..models.character import Character
+from ..models.model_provider import Model, ModelProvider
+from ..models.scene import Scene
+from ..prompts.prompt_builder import PromptBuilder
+from ..services.storage import upload_file, get_public_url
 from ..models.task import (
     Task,
     TaskCreate,
@@ -20,7 +32,212 @@ from ..models.task import (
     TaskProgressEvent,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+def _process_task(task_id: uuid.UUID) -> None:
+    """后台处理任务"""
+    logger.info("Background task started for %s", task_id)
+    SessionLocal = get_session_factory()
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            logger.error("Task %s not found", task_id)
+            return
+
+        from datetime import datetime, timezone
+
+        task.status = TaskStatus.PROCESSING
+        task.started_at = datetime.now(timezone.utc)
+        task.progress = 10.0
+        db.commit()
+        logger.info("Task %s status -> processing", task_id)
+
+        settings = Settings()
+        params = task.parameters or {}
+
+        # 使用 PromptBuilder 构建完整的提示词
+        prompt_builder = PromptBuilder()
+        enhanced_prompt = prompt_builder.build(
+            user_prompt=task.prompt,
+            parameters=params,
+        )
+        logger.info("Enhanced prompt: %s", enhanced_prompt[:200])
+
+        if task.type == "image":
+            # 根据 model_id 查找模型和提供商
+            model_id = params.get("model_id")
+            generator_result = None
+
+            if model_id:
+                model = db.query(Model).filter(Model.id == uuid.UUID(model_id)).first()
+                if model:
+                    provider = (
+                        db.query(ModelProvider)
+                        .filter(ModelProvider.id == model.provider_id)
+                        .first()
+                    )
+                    if provider:
+                        logger.info(
+                            "Using model %s from provider %s",
+                            model.name,
+                            provider.name,
+                        )
+                        model_config = {}
+                        if model.config:
+                            try:
+                                model_config = (
+                                    json.loads(model.config)
+                                    if isinstance(model.config, str)
+                                    else model.config
+                                )
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+
+                        if provider.name == "comfyui":
+                            generator_result = (
+                                "comfyui",
+                                model.name,
+                                provider,
+                                model_config,
+                            )
+                        else:
+                            generator_result = ("openai", None, provider, model_config)
+
+            # 模拟进度更新（API调用前）
+            for progress in [20.0, 30.0, 40.0]:
+                task = db.query(Task).filter(Task.id == task_id).first()
+                if not task or task.status == TaskStatus.FAILED:
+                    db.close()
+                    return
+                task.progress = progress
+                db.commit()
+                asyncio.run(asyncio.sleep(1))
+
+            # 调用对应的生成器
+            if generator_result and generator_result[0] == "comfyui":
+                _, model_name, provider, model_config = generator_result
+                comfyui_gen = ComfyUIGenerator(
+                    base_url=provider.base_url or "http://localhost:8188",
+                    api_key=provider.api_key,
+                )
+                result = asyncio.run(
+                    comfyui_gen.generate(
+                        prompt=enhanced_prompt,
+                        model_name=model_name,
+                        output_dir=settings.output_dir,
+                        style=params.get("style", "realistic"),
+                        size=params.get("size", "1024x1024"),
+                        config=model_config,
+                    )
+                )
+            else:
+                # 默认使用 OpenAI
+                openai_gen = ImageGenerator(settings)
+                result = asyncio.run(
+                    openai_gen.generate_async(
+                        prompt=enhanced_prompt,
+                        output_dir=settings.output_dir,
+                        style=params.get("style", "realistic"),
+                        size=params.get("size", "1024x1024"),
+                    )
+                )
+
+            # 检查任务是否被取消
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if not task or task.status == TaskStatus.FAILED:
+                db.close()
+                return
+
+            if result.success:
+                task.progress = 100.0
+                task.status = TaskStatus.COMPLETED
+                task.completed_at = datetime.now(timezone.utc)
+                params = task.parameters or {}
+                params["output_file"] = result.file_path
+                task.parameters = params
+
+                # 上传到 MinIO
+                prefix = "videos/" if task.type == "video" else "images/"
+                object_name = upload_file(result.file_path, prefix=prefix)
+                file_url = get_public_url(object_name)
+                logger.info(
+                    "Task %s completed, uploaded to MinIO: %s", task_id, file_url
+                )
+
+                # 提取关联信息
+                character_id = params.get("character_id")
+                chapter_id = params.get("chapter_id")
+                scene_id = params.get("scene_id")
+
+                # 创建作品记录
+                artwork = Artwork(
+                    title=task.prompt[:100],
+                    type=task.type,
+                    file_path=file_url,
+                    prompt=task.prompt,
+                    style=params.get("style"),
+                    parameters=params,
+                    project_id=task.project_id,
+                    character_id=uuid.UUID(character_id) if character_id else None,
+                    chapter_id=uuid.UUID(chapter_id) if chapter_id else None,
+                    scene_id=uuid.UUID(scene_id) if scene_id else None,
+                )
+                db.add(artwork)
+                db.flush()  # 获取artwork ID
+
+                # 如果有关联场景，更新场景的artwork_id
+                if scene_id:
+                    scene = (
+                        db.query(Scene).filter(Scene.id == uuid.UUID(scene_id)).first()
+                    )
+                    if scene:
+                        scene.artwork_id = artwork.id
+                        logger.info(
+                            "Updated scene %s with artwork %s", scene_id, artwork.id
+                        )
+
+                # 如果有关联角色，更新角色的参考图（如果是第一次生成）
+                if character_id:
+                    character = (
+                        db.query(Character)
+                        .filter(Character.id == uuid.UUID(character_id))
+                        .first()
+                    )
+                    if character:
+                        # 如果角色没有锁定的形象，自动添加到参考图
+                        if not character.locked_avatar_id:
+                            if not character.reference_images:
+                                character.reference_images = []
+                            if object_name not in character.reference_images:
+                                character.reference_images.append(object_name)
+                                logger.info(
+                                    "Added reference image to character %s",
+                                    character_id,
+                                )
+            else:
+                task.status = TaskStatus.FAILED
+                task.error_message = result.error
+                logger.error("Task %s failed: %s", task_id, result.error)
+        else:
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if task:
+                task.status = TaskStatus.FAILED
+                task.error_message = "视频生成功能尚未实现"
+
+        db.commit()
+    except Exception as e:
+        logger.exception("Task processing failed: %s", e)
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if task:
+            task.status = TaskStatus.FAILED
+            task.error_message = str(e)
+            db.commit()
+    finally:
+        db.close()
 
 
 @router.get("", response_model=TaskListResponse)
@@ -43,17 +260,30 @@ def get_task(task_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=TaskResponse, status_code=201)
-def create_task(data: TaskCreate, db: Session = Depends(get_db)):
-    """创建任务"""
+def create_task(
+    data: TaskCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """创建任务并启动后台处理"""
+    # 将 Pydantic 模型转换为 dict 以便存储到 JSON 字段
+    params_dict = (
+        data.parameters.model_dump(exclude_none=True) if data.parameters else None
+    )
+
     task = Task(
         type=data.type,
         prompt=data.prompt,
-        parameters=data.parameters,
+        parameters=params_dict,
+        project_id=uuid.UUID(data.project_id) if data.project_id else None,
         status=TaskStatus.PENDING,
     )
     db.add(task)
     db.commit()
     db.refresh(task)
+
+    background_tasks.add_task(_process_task, task.id)
+
     return TaskResponse.from_orm(task)
 
 
@@ -104,6 +334,20 @@ def cancel_task(task_id: str, db: Session = Depends(get_db)):
     db.commit()
 
 
+@router.delete("/{task_id}/delete", status_code=204)
+def delete_task(task_id: str, db: Session = Depends(get_db)):
+    """删除已完成/失败/暂停的任务"""
+    task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.status in [TaskStatus.PROCESSING, TaskStatus.PENDING]:
+        raise HTTPException(status_code=400, detail="Cannot delete active task")
+
+    db.delete(task)
+    db.commit()
+
+
 @router.get("/{task_id}/events")
 async def task_events(task_id: str, db: Session = Depends(get_db)):
     """SSE进度推送"""
@@ -113,7 +357,6 @@ async def task_events(task_id: str, db: Session = Depends(get_db)):
 
     async def event_generator() -> Generator[str, None, None]:
         while True:
-            # 刷新任务状态
             db.refresh(task)
 
             event = TaskProgressEvent(

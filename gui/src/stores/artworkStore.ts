@@ -34,7 +34,7 @@ export const useArtworkStore = create<ArtworkStore>((set, get) => ({
   toggleFavorite: (id) => {
     const { artworks } = get();
     const updated = artworks.map((a) =>
-      a.id === id ? { ...a, is_favorite: !a.is_favorite } : a
+      a.id === id ? { ...a, is_favorite: !a.is_favorite } : a,
     );
     set({ artworks: updated });
     get().updateFavorites();

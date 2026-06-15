@@ -14,6 +14,8 @@ export const taskService = {
 
   cancel: (id: string) => api.delete(`/api/tasks/${id}`),
 
+  delete: (id: string) => api.delete(`/api/tasks/${id}/delete`),
+
   getEventSource: (id: string) => {
     return new EventSource(`http://localhost:8000/api/tasks/${id}/events`);
   },
