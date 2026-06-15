@@ -831,6 +831,7 @@ async def breakdown_chapter_to_scenes(
 ):
     """AI自动将章节内容拆解为分镜"""
     import httpx
+    from ..models.model_provider import Model, ModelProvider
 
     # 验证章节存在且属于该项目
     chapter = db.query(Chapter).filter(Chapter.id == uuid.UUID(chapter_id)).first()
@@ -853,9 +854,62 @@ async def breakdown_chapter_to_scenes(
     if not content or len(content.strip()) < 10:
         raise HTTPException(status_code=400, detail="章节内容太短，无法拆解")
 
+    # 获取文本生成模型配置
     settings = Settings()
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=500, detail="未配置OpenAI API密钥")
+
+    # 优先从模型设置中获取 text_generation 类型的模型
+    text_model = (
+        db.query(Model)
+        .filter(
+            Model.model_type == "text_generation",
+            Model.is_enabled == True,
+        )
+        .first()
+    )
+
+    # 获取模型配置
+    api_key = None
+    base_url = None
+    model_name = None
+
+    if text_model:
+        # 使用配置的文本模型
+        provider = (
+            db.query(ModelProvider)
+            .filter(ModelProvider.id == text_model.provider_id)
+            .first()
+        )
+
+        if provider:
+            api_key = provider.api_key or settings.openai_api_key
+            base_url = provider.base_url
+            model_name = text_model.name
+
+            # 解析模型配置
+            model_config = {}
+            if text_model.config:
+                try:
+                    model_config = (
+                        json.loads(text_model.config)
+                        if isinstance(text_model.config, str)
+                        else text_model.config
+                    )
+                except:
+                    pass
+
+    # 回退到 .env 配置
+    if not api_key:
+        api_key = settings.openai_api_key
+        if not api_key:
+            raise HTTPException(
+                status_code=500, detail="未配置文本模型或OpenAI API密钥"
+            )
+
+    if not base_url:
+        base_url = "https://api.openai.com/v1"
+
+    if not model_name:
+        model_name = settings.openai_model
 
     # 构建提示词
     prompt = f"""请将以下文本内容拆解为{data.max_scenes}个以内的分镜（镜头）。
@@ -886,24 +940,33 @@ async def breakdown_chapter_to_scenes(
 
     try:
         async with httpx.AsyncClient() as client:
+            # 构建请求头
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+
+            # 构建请求体
+            request_body = {
+                "model": model_name,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "你是一个专业的分镜师，擅长将文本转化为视觉分镜。请直接返回JSON格式，不要有其他文字。",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.7,
+                "max_tokens": 2000,
+            }
+
+            # 如果是 OpenAI 兼容 API，直接调用
+            api_url = f"{base_url.rstrip('/')}/chat/completions"
+
             response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.openai_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.openai_model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "你是一个专业的分镜师，擅长将文本转化为视觉分镜。请直接返回JSON格式，不要有其他文字。",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0.7,
-                    "max_tokens": 2000,
-                },
+                api_url,
+                headers=headers,
+                json=request_body,
                 timeout=60.0,
             )
 

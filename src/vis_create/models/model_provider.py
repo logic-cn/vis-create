@@ -23,6 +23,7 @@ class ModelType(str, Enum):
     TEXT_TO_VIDEO = "text_to_video"  # 文生视频
     IMAGE_TO_IMAGE = "image_to_image"  # 图生图
     IMAGE_TO_VIDEO = "image_to_video"  # 图生视频
+    TEXT_GENERATION = "text_generation"  # 文本生成（用于AI拆解等）
 
 
 class ProviderType(str, Enum):
