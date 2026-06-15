@@ -5,6 +5,7 @@ import type {
   Character,
   Script,
   Chapter,
+  Scene,
 } from "../types/project";
 
 interface ProjectStore {
@@ -17,6 +18,7 @@ interface ProjectStore {
   characters: Character[];
   scripts: Script[];
   chapters: Record<string, Chapter[]>;
+  scenes: Record<string, Scene[]>;
 
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (project: Project | null) => void;
@@ -43,6 +45,11 @@ interface ProjectStore {
   addChapter: (scriptId: string, chapter: Chapter) => void;
   updateChapter: (scriptId: string, chapter: Chapter) => void;
   removeChapter: (scriptId: string, chapterId: string) => void;
+
+  setScenes: (chapterId: string, scenes: Scene[]) => void;
+  addScene: (chapterId: string, scene: Scene) => void;
+  updateScene: (chapterId: string, scene: Scene) => void;
+  removeScene: (chapterId: string, sceneId: string) => void;
 }
 
 export const useProjectStore = create<ProjectStore>((set) => ({
@@ -54,6 +61,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   characters: [],
   scripts: [],
   chapters: {},
+  scenes: {},
 
   setProjects: (projects) => set({ projects }),
   setCurrentProject: (project) => set({ currentProject: project }),
@@ -125,6 +133,36 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         ...state.chapters,
         [scriptId]: (state.chapters[scriptId] || []).filter(
           (ch) => ch.id !== chapterId,
+        ),
+      },
+    })),
+
+  setScenes: (chapterId, scenes) =>
+    set((state) => ({
+      scenes: { ...state.scenes, [chapterId]: scenes },
+    })),
+  addScene: (chapterId, scene) =>
+    set((state) => ({
+      scenes: {
+        ...state.scenes,
+        [chapterId]: [...(state.scenes[chapterId] || []), scene],
+      },
+    })),
+  updateScene: (chapterId, scene) =>
+    set((state) => ({
+      scenes: {
+        ...state.scenes,
+        [chapterId]: (state.scenes[chapterId] || []).map((s) =>
+          s.id === scene.id ? scene : s,
+        ),
+      },
+    })),
+  removeScene: (chapterId, sceneId) =>
+    set((state) => ({
+      scenes: {
+        ...state.scenes,
+        [chapterId]: (state.scenes[chapterId] || []).filter(
+          (s) => s.id !== sceneId,
         ),
       },
     })),

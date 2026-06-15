@@ -1,11 +1,28 @@
 import { useEffect, useState } from "react";
 import { projectService } from "../../services/projectService";
 import { useProjectStore } from "../../stores/projectStore";
-import type { Chapter, ScriptCreateParams } from "../../types/project";
+import type {
+  Chapter,
+  Scene,
+  SceneCreateParams,
+  ScriptCreateParams,
+} from "../../types/project";
 
 interface ScriptPanelProps {
   projectId: string;
 }
+
+const SHOT_TYPES = [
+  { id: "extreme_close_up", label: "特写", emoji: "🔍" },
+  { id: "close_up", label: "近景", emoji: "👤" },
+  { id: "medium_shot", label: "中景", emoji: "🧑" },
+  { id: "full_shot", label: "全景", emoji: "🏃" },
+  { id: "long_shot", label: "远景", emoji: "🏔️" },
+  { id: "birds_eye", label: "鸟瞰", emoji: "🦅" },
+  { id: "low_angle", label: "仰拍", emoji: "⬆️" },
+  { id: "high_angle", label: "俯拍", emoji: "⬇️" },
+  { id: "dutch_angle", label: "倾斜", emoji: "↩️" },
+];
 
 export default function ScriptPanel({ projectId }: ScriptPanelProps) {
   const {
@@ -19,6 +36,11 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
     addChapter,
     updateChapter,
     removeChapter,
+    scenes,
+    setScenes,
+    addScene,
+    updateScene,
+    removeScene,
   } = useProjectStore();
   const [isCreating, setIsCreating] = useState(false);
   const [form, setForm] = useState<ScriptCreateParams>({
@@ -32,8 +54,22 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
   const [editContent, setEditContent] = useState("");
   const [editChapterTitle, setEditChapterTitle] = useState("");
 
+  // 分镜相关状态
+  const [isCreatingScene, setIsCreatingScene] = useState(false);
+  const [sceneForm, setSceneForm] = useState<SceneCreateParams>({
+    title: "",
+    description: "",
+    sort_order: 0,
+    shot_type: "medium_shot",
+    dialogue: "",
+    background_description: "",
+    mood: "",
+  });
+  const [editingScene, setEditingScene] = useState<Scene | null>(null);
+
   const script = scripts[0] || null;
   const scriptChapters = script ? chapters[script.id] || [] : [];
+  const chapterScenes = selectedChapter ? scenes[selectedChapter.id] || [] : [];
 
   useEffect(() => {
     projectService.listScripts(projectId).then((res) => setScripts(res.data));
@@ -46,6 +82,15 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
         .then((res) => setChapters(script.id, res.data));
     }
   }, [projectId, script, chapters, setChapters]);
+
+  // 加载选中章节的分镜
+  useEffect(() => {
+    if (selectedChapter && script && !scenes[selectedChapter.id]) {
+      projectService
+        .listScenes(projectId, script.id, selectedChapter.id)
+        .then((res) => setScenes(selectedChapter.id, res.data));
+    }
+  }, [projectId, script, selectedChapter, scenes, setScenes]);
 
   async function handleCreateScript() {
     if (!form.title.trim()) return;
@@ -135,6 +180,68 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
     setSelectedChapter(chapter);
     setEditContent(chapter.content || "");
     setEditChapterTitle(chapter.title);
+    setEditingScene(null);
+  }
+
+  // 分镜操作
+  async function handleCreateScene() {
+    if (!script || !selectedChapter || !sceneForm.title.trim()) return;
+    try {
+      const scene = await projectService.createScene(
+        projectId,
+        script.id,
+        selectedChapter.id,
+        { ...sceneForm, sort_order: chapterScenes.length + 1 },
+      );
+      addScene(selectedChapter.id, scene);
+      setSceneForm({
+        title: "",
+        description: "",
+        sort_order: 0,
+        shot_type: "medium_shot",
+        dialogue: "",
+        background_description: "",
+        mood: "",
+      });
+      setIsCreatingScene(false);
+    } catch (err) {
+      console.error("Create scene failed:", err);
+    }
+  }
+
+  async function handleUpdateScene() {
+    if (!script || !selectedChapter || !editingScene) return;
+    try {
+      const updated = await projectService.updateScene(
+        projectId,
+        script.id,
+        selectedChapter.id,
+        editingScene.id,
+        editingScene,
+      );
+      updateScene(selectedChapter.id, updated);
+      setEditingScene(null);
+    } catch (err) {
+      console.error("Update scene failed:", err);
+    }
+  }
+
+  async function handleDeleteScene(sceneId: string) {
+    if (!script || !selectedChapter) return;
+    try {
+      await projectService.deleteScene(
+        projectId,
+        script.id,
+        selectedChapter.id,
+        sceneId,
+      );
+      removeScene(selectedChapter.id, sceneId);
+      if (editingScene?.id === sceneId) {
+        setEditingScene(null);
+      }
+    } catch (err) {
+      console.error("Delete scene failed:", err);
+    }
   }
 
   // 无剧本时显示创建界面
@@ -214,7 +321,7 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
     );
   }
 
-  // 剧本详情 - 左右布局
+  // 剧本详情 - 三栏布局：章节列表 | 章节内容 | 分镜列表
   return (
     <div>
       {/* 剧本头部 */}
@@ -294,10 +401,10 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
         )}
       </div>
 
-      {/* 章节管理 - 左右布局 */}
-      <div className="flex gap-4 min-h-[400px]">
-        {/* 左侧：章节列表 */}
-        <div className="w-64 flex-shrink-0 rounded-2xl bg-bg-tertiary/40 border border-white/5 overflow-hidden">
+      {/* 章节和分镜管理 - 三栏布局 */}
+      <div className="flex gap-4 min-h-[500px]">
+        {/* 第一栏：章节列表 */}
+        <div className="w-56 flex-shrink-0 rounded-2xl bg-bg-tertiary/40 border border-white/5 overflow-hidden">
           <div className="p-3 border-b border-white/5">
             <h4 className="text-sm font-medium text-text-primary mb-2">
               章节列表
@@ -320,7 +427,7 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
               </button>
             </div>
           </div>
-          <div className="overflow-y-auto max-h-[320px]">
+          <div className="overflow-y-auto max-h-[420px]">
             {scriptChapters.length === 0 ? (
               <div className="text-center py-8 text-text-muted">
                 <p className="text-xs">暂无章节</p>
@@ -348,7 +455,7 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
           </div>
         </div>
 
-        {/* 右侧：章节内容编辑区 */}
+        {/* 第二栏：章节内容编辑 */}
         <div className="flex-1 rounded-2xl bg-bg-tertiary/40 border border-white/5 overflow-hidden">
           {selectedChapter ? (
             <div className="h-full flex flex-col">
@@ -381,7 +488,7 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
                   placeholder="在此编写章节内容..."
-                  className="w-full h-full min-h-[300px] px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
+                  className="w-full h-full min-h-[200px] px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
                 />
               </div>
             </div>
@@ -394,6 +501,217 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* 第三栏：分镜列表 */}
+        <div className="w-72 flex-shrink-0 rounded-2xl bg-bg-tertiary/40 border border-white/5 overflow-hidden">
+          <div className="p-3 border-b border-white/5">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-text-primary">
+                🎬 分镜列表
+              </h4>
+              {selectedChapter && (
+                <button
+                  onClick={() => setIsCreatingScene(true)}
+                  className="px-2 py-1 rounded-lg bg-accent-primary/20 text-accent-primary text-xs hover:bg-accent-primary/30 transition-colors"
+                >
+                  + 新建
+                </button>
+              )}
+            </div>
+            {selectedChapter && (
+              <p className="text-xs text-text-muted">
+                {selectedChapter.title} 的分镜
+              </p>
+            )}
+          </div>
+          <div className="overflow-y-auto max-h-[420px]">
+            {!selectedChapter ? (
+              <div className="text-center py-8 text-text-muted">
+                <p className="text-xs">请先选择章节</p>
+              </div>
+            ) : isCreatingScene ? (
+              <div className="p-3 space-y-3">
+                <input
+                  type="text"
+                  value={sceneForm.title}
+                  onChange={(e) =>
+                    setSceneForm({ ...sceneForm, title: e.target.value })
+                  }
+                  placeholder="分镜标题 *"
+                  className="w-full px-2 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                  autoFocus
+                />
+                <textarea
+                  value={sceneForm.description || ""}
+                  onChange={(e) =>
+                    setSceneForm({ ...sceneForm, description: e.target.value })
+                  }
+                  placeholder="场景描述"
+                  rows={2}
+                  className="w-full px-2 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
+                />
+                <select
+                  value={sceneForm.shot_type || "medium_shot"}
+                  onChange={(e) =>
+                    setSceneForm({ ...sceneForm, shot_type: e.target.value })
+                  }
+                  className="w-full px-2 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                >
+                  {SHOT_TYPES.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.emoji} {st.label}
+                    </option>
+                  ))}
+                </select>
+                <textarea
+                  value={sceneForm.dialogue || ""}
+                  onChange={(e) =>
+                    setSceneForm({ ...sceneForm, dialogue: e.target.value })
+                  }
+                  placeholder="台词/旁白"
+                  rows={2}
+                  className="w-full px-2 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCreateScene}
+                    disabled={!sceneForm.title.trim()}
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-accent-primary text-bg-primary text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                  >
+                    创建
+                  </button>
+                  <button
+                    onClick={() => setIsCreatingScene(false)}
+                    className="px-3 py-1.5 rounded-lg bg-bg-tertiary text-text-secondary text-xs border border-white/5"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            ) : editingScene ? (
+              <div className="p-3 space-y-3">
+                <input
+                  type="text"
+                  value={editingScene.title}
+                  onChange={(e) =>
+                    setEditingScene({ ...editingScene, title: e.target.value })
+                  }
+                  placeholder="分镜标题 *"
+                  className="w-full px-2 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                />
+                <textarea
+                  value={editingScene.description || ""}
+                  onChange={(e) =>
+                    setEditingScene({
+                      ...editingScene,
+                      description: e.target.value,
+                    })
+                  }
+                  placeholder="场景描述"
+                  rows={2}
+                  className="w-full px-2 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
+                />
+                <select
+                  value={editingScene.shot_type || "medium_shot"}
+                  onChange={(e) =>
+                    setEditingScene({
+                      ...editingScene,
+                      shot_type: e.target.value,
+                    })
+                  }
+                  className="w-full px-2 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                >
+                  {SHOT_TYPES.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.emoji} {st.label}
+                    </option>
+                  ))}
+                </select>
+                <textarea
+                  value={editingScene.dialogue || ""}
+                  onChange={(e) =>
+                    setEditingScene({
+                      ...editingScene,
+                      dialogue: e.target.value,
+                    })
+                  }
+                  placeholder="台词/旁白"
+                  rows={2}
+                  className="w-full px-2 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleUpdateScene}
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-accent-primary text-bg-primary text-xs font-medium hover:opacity-90 transition-opacity"
+                  >
+                    保存
+                  </button>
+                  <button
+                    onClick={() => setEditingScene(null)}
+                    className="px-3 py-1.5 rounded-lg bg-bg-tertiary text-text-secondary text-xs border border-white/5"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            ) : chapterScenes.length === 0 ? (
+              <div className="text-center py-8 text-text-muted">
+                <p className="text-2xl mb-2">🎬</p>
+                <p className="text-xs">暂无分镜</p>
+                <p className="text-xs mt-1">点击上方"+ 新建"添加</p>
+              </div>
+            ) : (
+              <div className="p-2 space-y-2">
+                {chapterScenes.map((scene, idx) => (
+                  <div
+                    key={scene.id}
+                    className="p-2.5 rounded-lg bg-bg-secondary/50 border border-white/5 hover:border-white/10 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-xs text-text-muted">
+                            {idx + 1}.
+                          </span>
+                          <span className="text-xs font-medium text-text-primary truncate">
+                            {scene.title}
+                          </span>
+                        </div>
+                        {scene.shot_type && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-bg-tertiary/60 text-text-muted">
+                            {SHOT_TYPES.find((s) => s.id === scene.shot_type)
+                              ?.label || scene.shot_type}
+                          </span>
+                        )}
+                        {scene.dialogue && (
+                          <p className="text-[10px] text-text-muted mt-1 truncate italic">
+                            "{scene.dialogue}"
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => setEditingScene(scene)}
+                          className="p-1 rounded text-text-muted hover:text-text-secondary transition-colors"
+                          title="编辑"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDeleteScene(scene.id)}
+                          className="p-1 rounded text-text-muted hover:text-red-400 transition-colors"
+                          title="删除"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

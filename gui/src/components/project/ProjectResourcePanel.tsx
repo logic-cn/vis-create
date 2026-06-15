@@ -37,7 +37,7 @@ export default function ProjectResourcePanel({
   const [chapters, setChapters] = useState<Record<string, Chapter[]>>({});
   const [scenes, setScenes] = useState<Record<string, Scene[]>>({});
   const [activeTab, setActiveTab] = useState<
-    "reference" | "character" | "chapter" | "scene"
+    "reference" | "character" | "chapter"
   >("reference");
 
   useEffect(() => {
@@ -54,13 +54,8 @@ export default function ProjectResourcePanel({
     setChapters((prev) => ({ ...prev, [scriptId]: res.data }));
   }
 
-  async function handleChapterExpand(chapterId: string) {
+  async function handleChapterExpand(scriptId: string, chapterId: string) {
     if (scenes[chapterId]) return;
-    // 查找对应的 scriptId
-    const scriptId = Object.keys(chapters).find((sId) =>
-      chapters[sId]?.some((c) => c.id === chapterId),
-    );
-    if (!scriptId) return;
     const res = await projectService.listScenes(projectId, scriptId, chapterId);
     setScenes((prev) => ({ ...prev, [chapterId]: res.data }));
   }
@@ -68,8 +63,7 @@ export default function ProjectResourcePanel({
   const tabs = [
     { id: "reference" as const, label: "参考图", emoji: "🖼️" },
     { id: "character" as const, label: "角色", emoji: "🎭" },
-    { id: "chapter" as const, label: "章节", emoji: "📖" },
-    { id: "scene" as const, label: "分镜", emoji: "🎬" },
+    { id: "chapter" as const, label: "章节/分镜", emoji: "📖" },
   ];
 
   return (
@@ -92,7 +86,7 @@ export default function ProjectResourcePanel({
       </div>
 
       {/* 内容区 */}
-      <div className="p-3 max-h-48 overflow-y-auto">
+      <div className="p-3 max-h-60 overflow-y-auto">
         {/* 参考图 */}
         {activeTab === "reference" && (
           <div>
@@ -191,7 +185,7 @@ export default function ProjectResourcePanel({
           </div>
         )}
 
-        {/* 章节 */}
+        {/* 章节/分镜 - 内嵌结构 */}
         {activeTab === "chapter" && (
           <div>
             {scripts.length === 0 ? (
@@ -199,92 +193,74 @@ export default function ProjectResourcePanel({
                 项目中暂无剧本
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {scripts.map((script) => (
                   <div key={script.id}>
+                    {/* 剧本 */}
                     <button
                       onClick={() => handleScriptExpand(script.id)}
-                      className="w-full flex items-center gap-2 px-2 py-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
                     >
                       <span>📝</span>
                       <span className="font-medium">{script.title}</span>
                     </button>
                     {chapters[script.id] && (
-                      <div className="ml-6 space-y-1">
-                        {chapters[script.id].length === 0 ? (
-                          <p className="text-xs text-text-muted py-1">无章节</p>
-                        ) : (
-                          chapters[script.id].map((chapter) => (
-                            <button
-                              key={chapter.id}
-                              onClick={() =>
-                                onChapterSelect(
-                                  selectedChapter?.id === chapter.id
-                                    ? null
-                                    : chapter,
-                                  selectedChapter?.id === chapter.id
-                                    ? null
-                                    : script,
-                                )
-                              }
-                              className={`w-full text-left px-2 py-1 rounded text-xs transition-all ${
-                                selectedChapter?.id === chapter.id
-                                  ? "bg-accent-primary/10 text-accent-primary"
-                                  : "text-text-muted hover:text-text-secondary hover:bg-bg-secondary/50"
-                              }`}
-                            >
-                              {chapter.title}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {selectedChapter && (
-              <p className="text-xs text-accent-primary mt-2">
-                已选择: {selectedChapter.title}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* 分镜 */}
-        {activeTab === "scene" && (
-          <div>
-            {scripts.length === 0 ? (
-              <p className="text-xs text-text-muted text-center py-4">
-                项目中暂无剧本
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {scripts.map((script) => (
-                  <div key={script.id}>
-                    <button
-                      onClick={() => handleScriptExpand(script.id)}
-                      className="w-full flex items-center gap-2 px-2 py-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
-                    >
-                      <span>📝</span>
-                      <span className="font-medium">{script.title}</span>
-                    </button>
-                    {chapters[script.id] && (
-                      <div className="ml-4 space-y-1">
+                      <div className="ml-4 space-y-0.5">
                         {chapters[script.id].map((chapter) => (
                           <div key={chapter.id}>
-                            <button
-                              onClick={() => handleChapterExpand(chapter.id)}
-                              className="w-full flex items-center gap-2 px-2 py-1 text-xs text-text-muted hover:text-text-secondary transition-colors"
-                            >
-                              <span>📖</span>
-                              <span>{chapter.title}</span>
-                            </button>
+                            {/* 章节 */}
+                            <div className="flex items-center">
+                              <button
+                                onClick={() => {
+                                  onChapterSelect(
+                                    selectedChapter?.id === chapter.id
+                                      ? null
+                                      : chapter,
+                                    selectedChapter?.id === chapter.id
+                                      ? null
+                                      : script,
+                                  );
+                                  // 同时加载分镜
+                                  handleChapterExpand(script.id, chapter.id);
+                                }}
+                                className={`flex-1 text-left px-2 py-1.5 rounded text-xs transition-all ${
+                                  selectedChapter?.id === chapter.id
+                                    ? "bg-accent-primary/10 text-accent-primary"
+                                    : "text-text-muted hover:text-text-secondary hover:bg-bg-secondary/50"
+                                }`}
+                              >
+                                <span className="mr-1">📖</span>
+                                {chapter.title}
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleChapterExpand(script.id, chapter.id)
+                                }
+                                className="px-1.5 py-1 text-text-muted hover:text-text-secondary transition-colors"
+                                title="展开分镜"
+                              >
+                                <svg
+                                  width="10"
+                                  height="10"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  className={`transition-transform ${
+                                    scenes[chapter.id] ? "rotate-90" : ""
+                                  }`}
+                                >
+                                  <polyline points="9 6 15 12 9 18" />
+                                </svg>
+                              </button>
+                            </div>
+
+                            {/* 分镜列表（内嵌在章节下方） */}
                             {scenes[chapter.id] && (
-                              <div className="ml-6 space-y-1">
+                              <div className="ml-6 space-y-0.5 mt-0.5 mb-1">
                                 {scenes[chapter.id].length === 0 ? (
-                                  <p className="text-xs text-text-muted py-1">
-                                    无分镜
+                                  <p className="text-[10px] text-text-muted py-1 px-2">
+                                    暂无分镜
                                   </p>
                                 ) : (
                                   scenes[chapter.id].map((scene) => (
@@ -297,21 +273,19 @@ export default function ProjectResourcePanel({
                                             : scene,
                                         )
                                       }
-                                      className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
+                                      className={`w-full text-left px-2 py-1 rounded text-[11px] transition-all ${
                                         selectedScene?.id === scene.id
                                           ? "bg-accent-primary/10 text-accent-primary"
                                           : "text-text-muted hover:text-text-secondary hover:bg-bg-secondary/50"
                                       }`}
                                     >
-                                      <div className="flex items-center gap-2">
-                                        <span>🎬</span>
-                                        <span>{scene.title}</span>
-                                        {scene.shot_type && (
-                                          <span className="text-[10px] px-1 py-0.5 rounded bg-bg-tertiary/60">
-                                            {scene.shot_type}
-                                          </span>
-                                        )}
-                                      </div>
+                                      <span className="mr-1">🎬</span>
+                                      <span>{scene.title}</span>
+                                      {scene.shot_type && (
+                                        <span className="ml-1 text-[9px] opacity-60">
+                                          [{scene.shot_type}]
+                                        </span>
+                                      )}
                                     </button>
                                   ))
                                 )}
@@ -325,20 +299,26 @@ export default function ProjectResourcePanel({
                 ))}
               </div>
             )}
-            {selectedScene && (
+
+            {/* 选中状态显示 */}
+            {(selectedChapter || selectedScene) && (
               <div className="mt-2 p-2 rounded-lg bg-bg-secondary/30">
-                <p className="text-xs text-accent-primary font-medium">
-                  已选择: {selectedScene.title}
-                </p>
-                {selectedScene.description && (
-                  <p className="text-xs text-text-muted mt-1">
-                    {selectedScene.description}
+                {selectedChapter && !selectedScene && (
+                  <p className="text-xs text-accent-primary">
+                    已选择章节: {selectedChapter.title}
                   </p>
                 )}
-                {selectedScene.dialogue && (
-                  <p className="text-xs text-text-secondary mt-1 italic">
-                    台词: {selectedScene.dialogue}
-                  </p>
+                {selectedScene && (
+                  <div>
+                    <p className="text-xs text-accent-primary font-medium">
+                      已选择分镜: {selectedScene.title}
+                    </p>
+                    {selectedScene.description && (
+                      <p className="text-[10px] text-text-muted mt-0.5">
+                        {selectedScene.description}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
