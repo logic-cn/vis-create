@@ -1,4 +1,7 @@
-"""参数到提示词的映射配置"""
+"""参数到提示词的映射配置
+
+命名规范：使用驼峰命名（camelCase），与前端保持一致
+"""
 
 # 参数到英文提示词的映射
 PARAMETER_MAPPINGS = {
@@ -17,66 +20,113 @@ PARAMETER_MAPPINGS = {
     "photography": {
         "lighting": {
             "natural": "natural lighting",
-            "studio": "studio lighting, professional",
-            "dramatic": "dramatic lighting, high contrast",
-            "soft": "soft lighting, diffused",
-            "golden_hour": "golden hour, warm tones",
-            "blue_hour": "blue hour, cool tones",
-            "backlit": "backlit, silhouette effect",
-            "rim_light": "rim lighting, edge glow",
+            "golden-hour": "golden hour, warm tones",
+            "blue-hour": "blue hour, cool tones",
+            "top-light": "top lighting, overhead",
+            "side-light": "side lighting, dramatic shadows",
+            "backlight": "backlit, silhouette effect",
+            "soft-light": "soft lighting, diffused",
+            "hard-light": "hard lighting, high contrast",
+            "neon": "neon lighting, colorful",
+            "candlelight": "candlelight, warm glow",
         },
         "lens": {
-            "wide_angle": "wide angle lens, 24mm",
+            "wide-angle": "wide angle lens, 24mm",
             "standard": "standard lens, 50mm",
             "telephoto": "telephoto lens, compressed perspective",
             "macro": "macro lens, extreme close-up",
             "fisheye": "fisheye lens, distorted perspective",
-            "tilt_shift": "tilt-shift, miniature effect",
+            "tilt-shift": "tilt-shift, miniature effect",
         },
-        "depth_of_field": {
+        "depthOfField": {
             "shallow": "shallow depth of field, bokeh background",
             "deep": "deep depth of field, everything in focus",
-            "selective": "selective focus, subject isolation",
+            "ultra-shallow": "ultra shallow depth of field, extreme bokeh",
         },
         "composition": {
-            "rule_of_thirds": "rule of thirds composition",
-            "centered": "centered composition, symmetrical",
-            "golden_ratio": "golden ratio composition",
-            "leading_lines": "leading lines, dynamic composition",
-            "frame_within_frame": "framing composition, natural frame",
+            "rule-of-thirds": "rule of thirds composition",
+            "center": "centered composition, symmetrical",
+            "diagonal": "diagonal composition, dynamic",
+            "leading-lines": "leading lines, dynamic composition",
+            "framing": "framing composition, natural frame",
+            "negative-space": "negative space, minimalist composition",
         },
         "angle": {
-            "eye_level": "eye level angle",
-            "low_angle": "low angle, looking up, powerful",
-            "high_angle": "high angle, looking down",
-            "birds_eye": "bird's eye view, overhead",
-            "dutch_angle": "dutch angle, tilted, dynamic",
+            "eye-level": "eye level angle",
+            "high-angle": "high angle, looking down",
+            "low-angle": "low angle, looking up, powerful",
+            "birds-eye": "bird's eye view, overhead",
+            "worms-eye": "worm's eye view, from below",
+            "dutch-angle": "dutch angle, tilted, dynamic",
         },
     },
-    "post_production": {
+    "postProduction": {
         "tone": {
             "warm": "warm color tones",
             "cool": "cool color tones",
             "neutral": "neutral color balance",
-            "muted": "muted, desaturated tones",
-            "vibrant": "vibrant, saturated colors",
+            "vintage-film": "vintage film color grading, nostalgic",
+            "japanese": "Japanese style, soft pastel tones",
         },
         "saturation": {
-            "low": "desaturated, subtle colors",
-            "medium": "balanced saturation",
             "high": "highly saturated, vivid colors",
+            "normal": "balanced saturation",
+            "low": "desaturated, subtle colors",
+            "monochrome": "monochrome, single color",
+            "bw": "black and white",
         },
         "contrast": {
-            "low": "low contrast, flat",
-            "medium": "balanced contrast",
             "high": "high contrast, dramatic",
+            "normal": "balanced contrast",
+            "low": "low contrast, soft",
+            "hdr": "HDR, high dynamic range",
+            "soft": "soft contrast, gentle",
         },
-        "mood_filter": {
+        "filter": {
             "cinematic": "cinematic look, film color grading",
+            "vaporwave": "vaporwave aesthetic, retro digital",
             "dreamy": "dreamy, ethereal atmosphere",
-            "moody": "moody, atmospheric",
-            "bright": "bright, cheerful atmosphere",
             "dark": "dark, mysterious atmosphere",
+            "fresh": "fresh, clean, bright",
+            "noir": "film noir, dark and moody",
+            "documentary": "documentary style, natural",
+        },
+    },
+    "director": {
+        "cameraMovement": {
+            "push-in": "camera push in, zooming closer",
+            "pull-out": "camera pull out, revealing wider scene",
+            "pan": "camera pan, horizontal movement",
+            "track": "camera tracking shot",
+            "follow": "camera following subject",
+            "crane": "crane shot, vertical movement",
+            "orbit": "orbiting camera, circular movement",
+            "handheld": "handheld camera, slight shake",
+            "static": "static camera, no movement",
+        },
+        "pace": {
+            "fast": "fast paced, dynamic editing",
+            "slow": "slow paced, contemplative",
+            "accelerating": "accelerating pace, building tension",
+            "decelerating": "decelerating pace, calming down",
+            "steady": "steady pace, consistent rhythm",
+        },
+        "mood": {
+            "epic": "epic, grand, cinematic",
+            "romantic": "romantic, soft, intimate",
+            "suspense": "suspenseful, tense, mysterious",
+            "joyful": "joyful, happy, uplifting",
+            "melancholic": "melancholic, sad, reflective",
+            "tense": "tense, anxious, dramatic",
+            "calm": "calm, peaceful, serene",
+        },
+        "scene": {
+            "indoor": "indoor scene, interior",
+            "outdoor": "outdoor scene, exterior",
+            "urban": "urban environment, city",
+            "nature": "natural environment, wilderness",
+            "virtual": "virtual space, digital environment",
+            "stage": "stage setting, theatrical",
         },
     },
     "subject": {
@@ -85,27 +135,36 @@ PARAMETER_MAPPINGS = {
             "animal": "animal, wildlife",
             "landscape": "landscape, scenery",
             "architecture": "architecture, building",
-            "object": "object, still life",
             "abstract": "abstract, conceptual",
+            "product": "product photography",
+            "food": "food photography, appetizing",
+            "vehicle": "vehicle, transportation",
         },
         "emotion": {
-            "happy": "happy, joyful expression",
-            "sad": "sad, melancholic mood",
+            "joyful": "joyful, happy expression",
+            "melancholic": "melancholic, sad mood",
+            "tense": "tense, anxious expression",
             "calm": "calm, peaceful, serene",
-            "energetic": "energetic, dynamic",
             "mysterious": "mysterious, enigmatic",
+            "romantic": "romantic, loving",
+            "epic": "epic, heroic",
+            "nostalgic": "nostalgic, reminiscent",
         },
         "era": {
-            "modern": "modern, contemporary",
-            "retro": "retro, vintage style",
-            "futuristic": "futuristic, sci-fi",
-            "classical": "classical, traditional",
+            "ancient": "ancient times, classical",
+            "medieval": "medieval period",
+            "modern": "modern era, contemporary",
+            "contemporary": "contemporary, present day",
+            "future": "futuristic, sci-fi",
+            "retro-80s": "1980s retro style",
+            "retro-90s": "1990s retro style",
         },
-        "detail_level": {
+        "detail": {
             "minimal": "minimalist, simple",
-            "moderate": "moderate detail",
-            "high": "highly detailed, intricate",
-            "ultra": "ultra detailed, hyper-realistic",
+            "simple": "simple, clean",
+            "standard": "standard detail level",
+            "detailed": "highly detailed, intricate",
+            "ultra-detailed": "ultra detailed, hyper-realistic",
         },
     },
     "environment": {
@@ -116,32 +175,35 @@ PARAMETER_MAPPINGS = {
             "snowy": "snowy, winter scene",
             "foggy": "foggy, misty atmosphere",
             "stormy": "stormy, dramatic sky",
+            "windy": "windy, flowing elements",
         },
-        "time_of_day": {
+        "timeOfDay": {
             "dawn": "dawn, sunrise, early morning",
             "morning": "morning light",
             "noon": "midday, bright sunlight",
             "afternoon": "afternoon, warm light",
-            "sunset": "sunset, golden hour",
             "dusk": "dusk, twilight",
             "night": "nighttime, dark sky",
-            "blue_hour": "blue hour, twilight",
+            "midnight": "midnight, deep night",
         },
         "material": {
             "metal": "metallic, reflective surface",
             "wood": "wooden texture, natural grain",
             "glass": "glass, transparent, reflective",
             "fabric": "fabric texture, soft material",
+            "paper": "paper texture, delicate",
             "stone": "stone, rocky texture",
+            "plastic": "plastic, smooth surface",
             "organic": "organic, natural materials",
         },
-        "color_scheme": {
-            "monochrome": "monochrome, black and white",
-            "analogous": "analogous colors, harmonious",
+        "colorScheme": {
+            "monochrome": "monochrome, single color palette",
             "complementary": "complementary colors, high contrast",
+            "analogous": "analogous colors, harmonious",
             "triadic": "triadic color scheme, vibrant",
+            "full-color": "full color spectrum",
             "pastel": "pastel colors, soft tones",
-            "earth_tones": "earth tones, natural colors",
+            "neon": "neon colors, glowing",
         },
     },
 }
@@ -152,5 +214,6 @@ PARAMETER_PRIORITY = [
     "subject",  # 主体其次
     "environment",  # 环境再次
     "photography",  # 摄影参数
-    "post_production",  # 后期参数
+    "postProduction",  # 后期参数
+    "director",  # 导演参数（视频）
 ]
