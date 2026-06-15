@@ -157,10 +157,21 @@ export const projectService = {
       `${BASE}/${projectId}/scripts/${scriptId}/chapters/${chapterId}`,
     ),
 
-  // ── 场景（分镜）─�
+  // ── 场景（分镜）──
   listScenes: (projectId: string, scriptId: string, chapterId: string) =>
     api.get<SceneListResponse>(
       `${BASE}/${projectId}/scripts/${scriptId}/chapters/${chapterId}/scenes`,
+    ),
+
+  breakdownScenes: (
+    projectId: string,
+    scriptId: string,
+    chapterId: string,
+    data: { chapter_content?: string; max_scenes?: number },
+  ) =>
+    api.post<{ scenes: SceneCreateParams[] }>(
+      `${BASE}/${projectId}/scripts/${scriptId}/chapters/${chapterId}/scenes/breakdown`,
+      data,
     ),
 
   createScene: (

@@ -67,6 +67,13 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
   });
   const [editingScene, setEditingScene] = useState<Scene | null>(null);
 
+  // AI拆解相关状态
+  const [isBreakingDown, setIsBreakingDown] = useState(false);
+  const [breakdownResults, setBreakdownResults] = useState<
+    SceneCreateParams[] | null
+  >(null);
+  const [breakdownError, setBreakdownError] = useState<string | null>(null);
+
   const script = scripts[0] || null;
   const scriptChapters = script ? chapters[script.id] || [] : [];
   const chapterScenes = selectedChapter ? scenes[selectedChapter.id] || [] : [];
@@ -181,6 +188,52 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
     setEditContent(chapter.content || "");
     setEditChapterTitle(chapter.title);
     setEditingScene(null);
+    setBreakdownResults(null);
+    setBreakdownError(null);
+  }
+
+  // AI拆解分镜
+  async function handleBreakdownScenes() {
+    if (!script || !selectedChapter) return;
+    setIsBreakingDown(true);
+    setBreakdownError(null);
+    setBreakdownResults(null);
+
+    try {
+      const result = await projectService.breakdownScenes(
+        projectId,
+        script.id,
+        selectedChapter.id,
+        { max_scenes: 8 },
+      );
+      setBreakdownResults(result.scenes);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "AI拆解失败";
+      setBreakdownError(message);
+      console.error("Breakdown failed:", err);
+    } finally {
+      setIsBreakingDown(false);
+    }
+  }
+
+  // 批量创建拆解结果
+  async function handleCreateBreakdownScenes() {
+    if (!script || !selectedChapter || !breakdownResults) return;
+
+    try {
+      for (const sceneData of breakdownResults) {
+        const scene = await projectService.createScene(
+          projectId,
+          script.id,
+          selectedChapter.id,
+          { ...sceneData, sort_order: chapterScenes.length + 1 },
+        );
+        addScene(selectedChapter.id, scene);
+      }
+      setBreakdownResults(null);
+    } catch (err) {
+      console.error("Create breakdown scenes failed:", err);
+    }
   }
 
   // 分镜操作
@@ -511,12 +564,24 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
                 🎬 分镜列表
               </h4>
               {selectedChapter && (
-                <button
-                  onClick={() => setIsCreatingScene(true)}
-                  className="px-2 py-1 rounded-lg bg-accent-primary/20 text-accent-primary text-xs hover:bg-accent-primary/30 transition-colors"
-                >
-                  + 新建
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={handleBreakdownScenes}
+                    disabled={isBreakingDown || !editContent.trim()}
+                    className="px-2 py-1 rounded-lg bg-purple-500/20 text-purple-400 text-xs hover:bg-purple-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={
+                      editContent.trim() ? "AI自动拆解分镜" : "请先填写章节内容"
+                    }
+                  >
+                    {isBreakingDown ? "拆解中..." : "🤖 AI拆解"}
+                  </button>
+                  <button
+                    onClick={() => setIsCreatingScene(true)}
+                    className="px-2 py-1 rounded-lg bg-accent-primary/20 text-accent-primary text-xs hover:bg-accent-primary/30 transition-colors"
+                  >
+                    + 新建
+                  </button>
+                </div>
               )}
             </div>
             {selectedChapter && (
@@ -529,6 +594,75 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
             {!selectedChapter ? (
               <div className="text-center py-8 text-text-muted">
                 <p className="text-xs">请先选择章节</p>
+              </div>
+            ) : isBreakingDown ? (
+              <div className="text-center py-8">
+                <div className="animate-spin w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full mx-auto mb-2"></div>
+                <p className="text-xs text-text-muted">AI正在分析章节内容...</p>
+              </div>
+            ) : breakdownError ? (
+              <div className="p-3">
+                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                  <p className="text-xs text-red-400">{breakdownError}</p>
+                </div>
+                <button
+                  onClick={() => setBreakdownError(null)}
+                  className="mt-2 text-xs text-text-muted hover:text-text-secondary"
+                >
+                  关闭
+                </button>
+              </div>
+            ) : breakdownResults ? (
+              <div className="p-3 space-y-2">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-purple-400 font-medium">
+                    AI拆解结果 ({breakdownResults.length}个分镜)
+                  </p>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={handleCreateBreakdownScenes}
+                      className="px-2 py-1 rounded-lg bg-accent-primary text-bg-primary text-xs hover:opacity-90 transition-opacity"
+                    >
+                      全部创建
+                    </button>
+                    <button
+                      onClick={() => setBreakdownResults(null)}
+                      className="px-2 py-1 rounded-lg bg-bg-tertiary text-text-muted text-xs border border-white/5"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+                {breakdownResults.map((scene, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 rounded-lg bg-purple-500/5 border border-purple-500/10"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[10px] text-text-muted">
+                            {idx + 1}.
+                          </span>
+                          <span className="text-xs font-medium text-text-primary">
+                            {scene.title}
+                          </span>
+                        </div>
+                        {scene.shot_type && (
+                          <span className="text-[10px] px-1 py-0.5 rounded bg-bg-tertiary/60 text-text-muted">
+                            {SHOT_TYPES.find((s) => s.id === scene.shot_type)
+                              ?.label || scene.shot_type}
+                          </span>
+                        )}
+                        {scene.description && (
+                          <p className="text-[10px] text-text-muted mt-1 line-clamp-2">
+                            {scene.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : isCreatingScene ? (
               <div className="p-3 space-y-3">

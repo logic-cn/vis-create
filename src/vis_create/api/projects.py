@@ -5,6 +5,7 @@
 文件存储使用 MinIO 对象存储
 """
 
+import json
 import uuid
 import os
 from typing import Optional
@@ -19,8 +20,10 @@ from fastapi import (
     Form,
     Query,
 )
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ..config.settings import Settings
 from ..database.connection import get_db
 from ..services.storage import upload_file, delete_file, get_presigned_url
 from ..models.project import (
@@ -800,6 +803,149 @@ def list_scenes(
         data=[SceneResponse.model_validate(s) for s in scenes],
         total=len(scenes),
     )
+
+
+class SceneBreakdownRequest(BaseModel):
+    """AI拆解分镜请求"""
+
+    chapter_content: Optional[str] = None
+    max_scenes: int = 10
+
+
+class SceneBreakdownResult(BaseModel):
+    """AI拆解分镜结果"""
+
+    scenes: list[SceneCreate]
+
+
+@router.post(
+    "/{project_id}/scripts/{script_id}/chapters/{chapter_id}/scenes/breakdown",
+    response_model=SceneBreakdownResult,
+)
+async def breakdown_chapter_to_scenes(
+    project_id: str,
+    script_id: str,
+    chapter_id: str,
+    data: SceneBreakdownRequest,
+    db: Session = Depends(get_db),
+):
+    """AI自动将章节内容拆解为分镜"""
+    import httpx
+
+    # 验证章节存在且属于该项目
+    chapter = db.query(Chapter).filter(Chapter.id == uuid.UUID(chapter_id)).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+
+    script = (
+        db.query(Script)
+        .filter(
+            Script.id == uuid.UUID(script_id),
+            Script.project_id == uuid.UUID(project_id),
+        )
+        .first()
+    )
+    if not script or chapter.script_id != script.id:
+        raise HTTPException(status_code=404, detail="Chapter not found in this script")
+
+    # 获取章节内容
+    content = data.chapter_content or chapter.content
+    if not content or len(content.strip()) < 10:
+        raise HTTPException(status_code=400, detail="章节内容太短，无法拆解")
+
+    settings = Settings()
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=500, detail="未配置OpenAI API密钥")
+
+    # 构建提示词
+    prompt = f"""请将以下文本内容拆解为{data.max_scenes}个以内的分镜（镜头）。
+
+每个分镜应该是一个独立的画面描述，包含：
+1. 标题：简短的画面描述
+2. 画面描述：详细的画面内容
+3. 镜头类型：选择一个（extreme_close_up特写/close_up近景/medium_shot中景/full_shot全景/long_shot远景/birds_eye鸟瞰/low_angle仰拍/high_angle俯拍/dutch_angle倾斜）
+4. 台词/旁白：文本中的对话或旁白（如果有）
+5. 氛围：画面的整体氛围
+
+文本内容：
+{content[:2000]}
+
+请以JSON格式返回，格式如下：
+{{
+  "scenes": [
+    {{
+      "title": "分镜标题",
+      "description": "画面描述",
+      "shot_type": "镜头类型",
+      "dialogue": "台词（可选）",
+      "mood": "氛围（可选）",
+      "background_description": "背景描述（可选）"
+    }}
+  ]
+}}"""
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.openai_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": settings.openai_model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "你是一个专业的分镜师，擅长将文本转化为视觉分镜。请直接返回JSON格式，不要有其他文字。",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 2000,
+                },
+                timeout=60.0,
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=500, detail=f"AI服务调用失败: {response.text}"
+                )
+
+            result = response.json()
+            content_text = result["choices"][0]["message"]["content"]
+
+            # 解析JSON
+            # 尝试提取JSON部分（可能被markdown代码块包裹）
+            if "```json" in content_text:
+                content_text = content_text.split("```json")[1].split("```")[0]
+            elif "```" in content_text:
+                content_text = content_text.split("```")[1].split("```")[0]
+
+            parsed = json.loads(content_text.strip())
+            scenes_data = parsed.get("scenes", [])
+
+            # 转换为 SceneCreate 对象
+            scenes = []
+            for i, scene in enumerate(scenes_data[: data.max_scenes]):
+                scenes.append(
+                    SceneCreate(
+                        title=scene.get("title", f"分镜{i + 1}"),
+                        description=scene.get("description", ""),
+                        shot_type=scene.get("shot_type", "medium_shot"),
+                        dialogue=scene.get("dialogue"),
+                        mood=scene.get("mood"),
+                        background_description=scene.get("background_description"),
+                        sort_order=i + 1,
+                    )
+                )
+
+            return SceneBreakdownResult(scenes=scenes)
+
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"AI返回格式错误: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI拆解失败: {str(e)}")
 
 
 @router.post(
