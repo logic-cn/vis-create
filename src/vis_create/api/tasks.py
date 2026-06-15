@@ -7,10 +7,11 @@ import os
 import uuid
 import asyncio
 import logging
-from typing import Generator
+from typing import Generator, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..config.settings import Settings
@@ -137,12 +138,15 @@ def _process_task(task_id: uuid.UUID) -> None:
             else:
                 # 默认使用 OpenAI
                 openai_gen = ImageGenerator(settings)
+                # 获取参考图URL
+                reference_image_url = params.get("referenceImageUrl")
                 result = asyncio.run(
                     openai_gen.generate_async(
                         prompt=enhanced_prompt,
                         output_dir=settings.output_dir,
                         style=params.get("style", "realistic"),
                         size=params.get("size", "1024x1024"),
+                        reference_image_url=reference_image_url,
                     )
                 )
 
@@ -380,3 +384,117 @@ async def task_events(task_id: str, db: Session = Depends(get_db)):
             "Connection": "keep-alive",
         },
     )
+
+
+class ImageEditRequest(BaseModel):
+    """图片编辑请求"""
+
+    image_path: str
+    instruction: str
+    output_path: Optional[str] = None
+    mask_path: Optional[str] = None
+
+
+def _process_edit_task(task_id: uuid.UUID) -> None:
+    """后台处理图片编辑任务"""
+    logger.info("Background edit task started for %s", task_id)
+    SessionLocal = get_session_factory()
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            logger.error("Task %s not found", task_id)
+            return
+
+        from datetime import datetime, timezone
+
+        task.status = TaskStatus.PROCESSING
+        task.started_at = datetime.now(timezone.utc)
+        task.progress = 50.0
+        db.commit()
+
+        settings = Settings()
+        params = task.parameters or {}
+
+        # 创建图片生成器并执行编辑
+        image_gen = ImageGenerator(settings)
+        result = asyncio.run(
+            image_gen.edit_async(
+                image_path=params.get("image_path", ""),
+                instruction=task.prompt,
+                output_path=params.get("output_path"),
+                mask_path=params.get("mask_path"),
+            )
+        )
+
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task or task.status == TaskStatus.FAILED:
+            db.close()
+            return
+
+        if result.success:
+            task.progress = 100.0
+            task.status = TaskStatus.COMPLETED
+            task.completed_at = datetime.now(timezone.utc)
+            params["output_file"] = result.file_path
+            task.parameters = params
+
+            # 上传到 MinIO
+            object_name = upload_file(result.file_path, prefix="edited/")
+            file_url = get_public_url(object_name)
+            logger.info(
+                "Edit task %s completed, uploaded to MinIO: %s", task_id, file_url
+            )
+
+            # 创建作品记录
+            artwork = Artwork(
+                title=f"编辑: {task.prompt[:80]}",
+                type="image",
+                file_path=file_url,
+                prompt=task.prompt,
+                parameters=params,
+                project_id=task.project_id,
+            )
+            db.add(artwork)
+        else:
+            task.status = TaskStatus.FAILED
+            task.error_message = result.error
+            logger.error("Edit task %s failed: %s", task_id, result.error)
+
+        db.commit()
+    except Exception as e:
+        logger.exception("Edit task processing failed: %s", e)
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if task:
+            task.status = TaskStatus.FAILED
+            task.error_message = str(e)
+            db.commit()
+    finally:
+        db.close()
+
+
+@router.post("/edit", response_model=TaskResponse, status_code=201)
+def edit_image(
+    data: ImageEditRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """创建图片编辑任务"""
+    task = Task(
+        type="image",
+        prompt=data.instruction,
+        parameters={
+            "image_path": data.image_path,
+            "output_path": data.output_path,
+            "mask_path": data.mask_path,
+            "is_edit": True,
+        },
+        status=TaskStatus.PENDING,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+
+    background_tasks.add_task(_process_edit_task, task.id)
+
+    return TaskResponse.from_orm(task)

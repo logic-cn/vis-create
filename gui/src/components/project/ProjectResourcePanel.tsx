@@ -1,15 +1,23 @@
 import { useState, useEffect } from "react";
 import { projectService } from "../../services/projectService";
-import type { Asset, Character, Script, Chapter } from "../../types/project";
+import type {
+  Asset,
+  Character,
+  Script,
+  Chapter,
+  Scene,
+} from "../../types/project";
 
 interface ProjectResourcePanelProps {
   projectId: string;
   onReferenceSelect: (asset: Asset | null) => void;
   onCharacterSelect: (character: Character | null) => void;
   onChapterSelect: (chapter: Chapter | null, script: Script | null) => void;
+  onSceneSelect: (scene: Scene | null) => void;
   selectedReference: Asset | null;
   selectedCharacter: Character | null;
   selectedChapter: Chapter | null;
+  selectedScene: Scene | null;
 }
 
 export default function ProjectResourcePanel({
@@ -17,16 +25,19 @@ export default function ProjectResourcePanel({
   onReferenceSelect,
   onCharacterSelect,
   onChapterSelect,
+  onSceneSelect,
   selectedReference,
   selectedCharacter,
   selectedChapter,
+  selectedScene,
 }: ProjectResourcePanelProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [scripts, setScripts] = useState<Script[]>([]);
   const [chapters, setChapters] = useState<Record<string, Chapter[]>>({});
+  const [scenes, setScenes] = useState<Record<string, Scene[]>>({});
   const [activeTab, setActiveTab] = useState<
-    "reference" | "character" | "chapter"
+    "reference" | "character" | "chapter" | "scene"
   >("reference");
 
   useEffect(() => {
@@ -43,10 +54,22 @@ export default function ProjectResourcePanel({
     setChapters((prev) => ({ ...prev, [scriptId]: res.data }));
   }
 
+  async function handleChapterExpand(chapterId: string) {
+    if (scenes[chapterId]) return;
+    // 查找对应的 scriptId
+    const scriptId = Object.keys(chapters).find((sId) =>
+      chapters[sId]?.some((c) => c.id === chapterId),
+    );
+    if (!scriptId) return;
+    const res = await projectService.listScenes(projectId, scriptId, chapterId);
+    setScenes((prev) => ({ ...prev, [chapterId]: res.data }));
+  }
+
   const tabs = [
     { id: "reference" as const, label: "参考图", emoji: "🖼️" },
     { id: "character" as const, label: "角色", emoji: "🎭" },
     { id: "chapter" as const, label: "章节", emoji: "📖" },
+    { id: "scene" as const, label: "分镜", emoji: "🎬" },
   ];
 
   return (
@@ -224,6 +247,100 @@ export default function ProjectResourcePanel({
               <p className="text-xs text-accent-primary mt-2">
                 已选择: {selectedChapter.title}
               </p>
+            )}
+          </div>
+        )}
+
+        {/* 分镜 */}
+        {activeTab === "scene" && (
+          <div>
+            {scripts.length === 0 ? (
+              <p className="text-xs text-text-muted text-center py-4">
+                项目中暂无剧本
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {scripts.map((script) => (
+                  <div key={script.id}>
+                    <button
+                      onClick={() => handleScriptExpand(script.id)}
+                      className="w-full flex items-center gap-2 px-2 py-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      <span>📝</span>
+                      <span className="font-medium">{script.title}</span>
+                    </button>
+                    {chapters[script.id] && (
+                      <div className="ml-4 space-y-1">
+                        {chapters[script.id].map((chapter) => (
+                          <div key={chapter.id}>
+                            <button
+                              onClick={() => handleChapterExpand(chapter.id)}
+                              className="w-full flex items-center gap-2 px-2 py-1 text-xs text-text-muted hover:text-text-secondary transition-colors"
+                            >
+                              <span>📖</span>
+                              <span>{chapter.title}</span>
+                            </button>
+                            {scenes[chapter.id] && (
+                              <div className="ml-6 space-y-1">
+                                {scenes[chapter.id].length === 0 ? (
+                                  <p className="text-xs text-text-muted py-1">
+                                    无分镜
+                                  </p>
+                                ) : (
+                                  scenes[chapter.id].map((scene) => (
+                                    <button
+                                      key={scene.id}
+                                      onClick={() =>
+                                        onSceneSelect(
+                                          selectedScene?.id === scene.id
+                                            ? null
+                                            : scene,
+                                        )
+                                      }
+                                      className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
+                                        selectedScene?.id === scene.id
+                                          ? "bg-accent-primary/10 text-accent-primary"
+                                          : "text-text-muted hover:text-text-secondary hover:bg-bg-secondary/50"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span>🎬</span>
+                                        <span>{scene.title}</span>
+                                        {scene.shot_type && (
+                                          <span className="text-[10px] px-1 py-0.5 rounded bg-bg-tertiary/60">
+                                            {scene.shot_type}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {selectedScene && (
+              <div className="mt-2 p-2 rounded-lg bg-bg-secondary/30">
+                <p className="text-xs text-accent-primary font-medium">
+                  已选择: {selectedScene.title}
+                </p>
+                {selectedScene.description && (
+                  <p className="text-xs text-text-muted mt-1">
+                    {selectedScene.description}
+                  </p>
+                )}
+                {selectedScene.dialogue && (
+                  <p className="text-xs text-text-secondary mt-1 italic">
+                    台词: {selectedScene.dialogue}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}

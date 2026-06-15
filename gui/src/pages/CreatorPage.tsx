@@ -6,7 +6,13 @@ import { modelService } from "../services/modelService";
 import { useModelStore } from "../stores/modelStore";
 import ProjectSelector from "../components/project/ProjectSelector";
 import ProjectResourcePanel from "../components/project/ProjectResourcePanel";
-import type { Asset, Character, Chapter, Script } from "../types/project";
+import type {
+  Asset,
+  Character,
+  Chapter,
+  Script,
+  Scene,
+} from "../types/project";
 import type { CreationType, ParamGroup } from "../types/creation";
 import type { Model } from "../types/model";
 import {
@@ -64,6 +70,7 @@ export default function CreatorPage() {
   );
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [selectedScript, setSelectedScript] = useState<Script | null>(null);
+  const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string | undefined>(
     undefined,
   );
@@ -205,11 +212,19 @@ export default function CreatorPage() {
         selectedCharacter.name,
         selectedCharacter.age && `${selectedCharacter.age}岁`,
         selectedCharacter.personality,
+        selectedCharacter.visual_features,
         selectedCharacter.description,
       ]
         .filter(Boolean)
         .join("，");
       params.characterDescription = charDesc;
+      // 传递角色参考图
+      if (
+        selectedCharacter.reference_images &&
+        selectedCharacter.reference_images.length > 0
+      ) {
+        params.referenceImages = selectedCharacter.reference_images;
+      }
     }
     if (selectedChapter && selectedScript) {
       params.chapterContext = {
@@ -217,6 +232,17 @@ export default function CreatorPage() {
         chapterTitle: selectedChapter.title,
         chapterContent: selectedChapter.content,
       };
+    }
+    // 场景分镜
+    if (selectedScene) {
+      params.sceneContext = {
+        description: selectedScene.description,
+        mood: selectedScene.mood,
+        shotType: selectedScene.shot_type,
+        background: selectedScene.background_description,
+        dialogue: selectedScene.dialogue,
+      };
+      params.scene_id = selectedScene.id;
     }
 
     return params;
@@ -435,9 +461,11 @@ export default function CreatorPage() {
                     setSelectedChapter(chapter);
                     setSelectedScript(script);
                   }}
+                  onSceneSelect={setSelectedScene}
                   selectedReference={selectedReference}
                   selectedCharacter={selectedCharacter}
                   selectedChapter={selectedChapter}
+                  selectedScene={selectedScene}
                 />
               )}
 
