@@ -52,46 +52,71 @@ def ensure_bucket() -> None:
 
 
 def upload_file(
-    file_path: str,
+    file_path: Optional[str] = None,
+    file_data: Optional[bytes] = None,
+    content_type: Optional[str] = None,
     prefix: str = "outputs/",
+    extension: Optional[str] = None,
 ) -> str:
     """
-    上传本地文件到 MinIO
+    上传文件到 MinIO
 
     Args:
-        file_path: 本地文件路径
+        file_path: 本地文件路径（与 file_data 二选一）
+        file_data: 文件字节数据（与 file_path 二选一）
+        content_type: 文件 MIME 类型
         prefix: 对象名前缀（如 "outputs/"）
+        extension: 文件扩展名（如 ".png"）
 
     Returns:
         对象名称
     """
+    if not file_path and not file_data:
+        raise ValueError("Either file_path or file_data must be provided")
+
     client = get_minio_client()
     ensure_bucket()
 
     bucket = _get_settings().minio_bucket
-    file_name = os.path.basename(file_path)
+
+    if file_path:
+        file_name = os.path.basename(file_path)
+        ext = os.path.splitext(file_name)[1].lower()
+    else:
+        ext = extension or ".bin"
+        file_name = f"{uuid.uuid4().hex[:12]}{ext}"
+
     object_name = f"{prefix}{file_name}"
 
-    ext = os.path.splitext(file_name)[1].lower()
-    content_types = {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".webp": "image/webp",
-        ".gif": "image/gif",
-        ".mp4": "video/mp4",
-        ".mov": "video/quicktime",
-        ".avi": "video/x-msvideo",
-        ".mkv": "video/x-matroska",
-    }
-    content_type = content_types.get(ext, "application/octet-stream")
+    if not content_type:
+        content_types = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+            ".mp4": "video/mp4",
+            ".mov": "video/quicktime",
+            ".avi": "video/x-msvideo",
+            ".mkv": "video/x-matroska",
+        }
+        content_type = content_types.get(ext, "application/octet-stream")
 
-    client.fput_object(
-        bucket,
-        object_name,
-        file_path,
-        content_type=content_type,
-    )
+    if file_path:
+        client.fput_object(
+            bucket,
+            object_name,
+            file_path,
+            content_type=content_type,
+        )
+    else:
+        client.put_object(
+            bucket,
+            object_name,
+            io.BytesIO(file_data),
+            length=len(file_data),
+            content_type=content_type,
+        )
 
     logger.info("Uploaded %s to MinIO as %s/%s", file_name, bucket, object_name)
     return object_name

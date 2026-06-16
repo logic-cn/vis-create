@@ -33,7 +33,9 @@ class Settings(BaseModel):
         description="视频生成API密钥",
     )
     video_api_endpoint: str = Field(
-        default_factory=lambda: os.getenv("VIDEO_API_ENDPOINT", "https://api.runway.com/v1/generate"),
+        default_factory=lambda: os.getenv(
+            "VIDEO_API_ENDPOINT", "https://api.runway.com/v1/generate"
+        ),
         description="视频生成API端点",
     )
     video_model: str = Field(
@@ -67,6 +69,28 @@ class Settings(BaseModel):
     db_password: str = Field(
         default_factory=lambda: os.getenv("DB_PASSWORD", ""),
         description="数据库密码",
+    )
+
+    # MinIO配置
+    minio_endpoint: str = Field(
+        default_factory=lambda: os.getenv("MINIO_ENDPOINT", "127.0.0.1:9000"),
+        description="MinIO端点",
+    )
+    minio_access_key: str = Field(
+        default_factory=lambda: os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+        description="MinIO访问密钥",
+    )
+    minio_secret_key: str = Field(
+        default_factory=lambda: os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+        description="MinIO秘密密钥",
+    )
+    minio_bucket: str = Field(
+        default_factory=lambda: os.getenv("MINIO_BUCKET", "vis-create"),
+        description="MinIO存储桶",
+    )
+    minio_secure: bool = Field(
+        default_factory=lambda: os.getenv("MINIO_SECURE", "false").lower() == "true",
+        description="MinIO是否使用HTTPS",
     )
 
     # 应用配置

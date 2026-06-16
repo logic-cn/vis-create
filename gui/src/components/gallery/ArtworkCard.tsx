@@ -1,12 +1,18 @@
 import { Artwork } from "../../types/artwork";
 import { useArtworkStore } from "../../stores/artworkStore";
 import { artworkService } from "../../services/artworkService";
+import { STYLE_OPTIONS } from "../../constants/creation-options";
+
+const STYLE_MAP = Object.fromEntries(
+  STYLE_OPTIONS.map((o) => [o.id, `${o.emoji} ${o.label}`]),
+);
 
 interface ArtworkCardProps {
   artwork: Artwork;
+  onClick?: () => void;
 }
 
-export default function ArtworkCard({ artwork }: ArtworkCardProps) {
+export default function ArtworkCard({ artwork, onClick }: ArtworkCardProps) {
   const { toggleFavorite } = useArtworkStore();
 
   async function handleToggleFavorite() {
@@ -19,7 +25,7 @@ export default function ArtworkCard({ artwork }: ArtworkCardProps) {
   }
 
   return (
-    <div className="card group cursor-pointer">
+    <div className="card group cursor-pointer" onClick={onClick}>
       <div className="aspect-square bg-bg-tertiary rounded-lg overflow-hidden mb-3 relative">
         {artwork.thumbnail_path || artwork.file_path ? (
           <img
@@ -43,7 +49,9 @@ export default function ArtworkCard({ artwork }: ArtworkCardProps) {
         </button>
       </div>
       <h3 className="text-sm font-medium truncate">{artwork.title}</h3>
-      <p className="text-xs text-text-muted mt-1 truncate">{artwork.style || "默认风格"}</p>
+      <p className="text-xs text-text-muted mt-1 truncate">
+        {STYLE_MAP[artwork.style ?? ""] ?? artwork.style ?? "默认风格"}
+      </p>
     </div>
   );
 }

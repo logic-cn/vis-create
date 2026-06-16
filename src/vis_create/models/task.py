@@ -13,7 +13,6 @@ from sqlalchemy import (
     DateTime,
     Enum as SQLEnum,
     Float,
-    ForeignKey,
     JSON,
     String,
     Text,
@@ -42,7 +41,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    artwork_id = Column(UUID(as_uuid=True), ForeignKey("artworks.id"), nullable=True)
+    artwork_id = Column(UUID(as_uuid=True), nullable=True)
     project_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     type = Column(SQLEnum("image", "video", name="task_type"), nullable=False)
     status = Column(

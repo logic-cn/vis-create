@@ -76,9 +76,9 @@ venv.bak/
 *.pth
 *.bin
 
-# 生成的图片和视频（可选，根据需要调整）
-# output/
-# generated/
+# 生成的图片和视频
+output/
+generated/
 
 # 临时文件
 *.tmp
@@ -117,3 +117,17 @@ gui/src-tauri/target/
 gui/src-tauri/icons/*.png
 gui/src-tauri/icons/*.ico
 gui/src-tauri/icons/*.icns
+gui/src-tauri/gen/
+gui/src-tauri/Cargo.lock
+
+# Node.js lock files (if not needed)
+gui/package-lock.json
+
+# Claude worktrees
+.claude/worktrees/
+
+# uv lock file
+uv.lock
+
+# Accidental nested gui directory
+gui/gui/

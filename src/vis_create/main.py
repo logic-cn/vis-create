@@ -40,15 +40,11 @@ def main(
 @app.command()
 def generate(
     prompt: str = typer.Argument(..., help="图片生成提示词"),
-    output: str = typer.Option(
-        "./output", "--output", "-o", help="输出目录路径"
-    ),
+    output: str = typer.Option("./output", "--output", "-o", help="输出目录路径"),
     style: str = typer.Option(
         "realistic", "--style", "-s", help="图片风格 (realistic/anime/cartoon/artistic)"
     ),
-    size: str = typer.Option(
-        "1024x1024", "--size", help="图片尺寸 (宽x高)"
-    ),
+    size: str = typer.Option("1024x1024", "--size", help="图片尺寸 (宽x高)"),
 ):
     """
     生成AI图片
@@ -72,15 +68,9 @@ def generate(
 @app.command()
 def video(
     prompt: str = typer.Argument(..., help="视频生成提示词"),
-    output: str = typer.Option(
-        "./output", "--output", "-o", help="输出目录路径"
-    ),
-    duration: int = typer.Option(
-        5, "--duration", "-d", help="视频时长（秒）"
-    ),
-    fps: int = typer.Option(
-        24, "--fps", help="视频帧率"
-    ),
+    output: str = typer.Option("./output", "--output", "-o", help="输出目录路径"),
+    duration: int = typer.Option(5, "--duration", "-d", help="视频时长（秒）"),
+    fps: int = typer.Option(24, "--fps", help="视频帧率"),
 ):
     """
     生成AI视频
@@ -105,15 +95,15 @@ def video(
 def edit(
     image_path: str = typer.Argument(..., help="要编辑的图片路径"),
     instruction: str = typer.Argument(..., help="编辑指令"),
-    output: str = typer.Option(
-        None, "--output", "-o", help="输出路径（默认覆盖原图）"
-    ),
+    output: str = typer.Option(None, "--output", "-o", help="输出路径（默认覆盖原图）"),
 ):
     """
     编辑现有图片
     """
     console.print(
-        Panel(f"[bold blue]编辑图片[/bold blue]\n图片: {image_path}\n指令: {instruction}")
+        Panel(
+            f"[bold blue]编辑图片[/bold blue]\n图片: {image_path}\n指令: {instruction}"
+        )
     )
 
     agent = VisCreateAgent()

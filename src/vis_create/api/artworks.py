@@ -43,13 +43,25 @@ def list_artworks(
     if style:
         query = query.filter(Artwork.style == style)
     if project_id:
-        query = query.filter(Artwork.project_id == uuid.UUID(project_id))
+        try:
+            query = query.filter(Artwork.project_id == uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project_id format")
     if character_id:
-        query = query.filter(Artwork.character_id == uuid.UUID(character_id))
+        try:
+            query = query.filter(Artwork.character_id == uuid.UUID(character_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid character_id format")
     if chapter_id:
-        query = query.filter(Artwork.chapter_id == uuid.UUID(chapter_id))
+        try:
+            query = query.filter(Artwork.chapter_id == uuid.UUID(chapter_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid chapter_id format")
     if scene_id:
-        query = query.filter(Artwork.scene_id == uuid.UUID(scene_id))
+        try:
+            query = query.filter(Artwork.scene_id == uuid.UUID(scene_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid scene_id format")
     if search:
         query = query.filter(
             Artwork.title.ilike(f"%{search}%") | Artwork.prompt.ilike(f"%{search}%")

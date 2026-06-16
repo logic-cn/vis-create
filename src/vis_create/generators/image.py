@@ -32,6 +32,12 @@ class ImageGenerator:
         self.client = httpx.AsyncClient()
         self.api_base = "https://api.openai.com/v1"
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
     async def generate_async(
         self,
         prompt: str,
@@ -67,7 +73,7 @@ class ImageGenerator:
                 return ImageResult(success=False, error=result.error)
 
             # 保存到指定目录
-            file_path = self._save_from_url(result.file_path, output_dir)
+            file_path = await self._save_from_url(result.file_path, output_dir)
             return ImageResult(success=True, file_path=file_path)
 
         except Exception as e:
@@ -364,11 +370,10 @@ class ImageGenerator:
         # 默认返回 1024x1024
         return "1024x1024"
 
-    def _save_from_url(self, url: str, output_dir: str) -> str:
+    async def _save_from_url(self, url: str, output_dir: str) -> str:
         """从URL下载并保存图片"""
         import hashlib
         from datetime import datetime
-        import asyncio
 
         # 生成文件名
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -380,7 +385,7 @@ class ImageGenerator:
 
         # 下载并保存
         file_path = os.path.join(output_dir, filename)
-        response = asyncio.run(self.client.get(url, timeout=60.0))
+        response = await self.client.get(url, timeout=60.0)
 
         with open(file_path, "wb") as f:
             f.write(response.content)

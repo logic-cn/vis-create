@@ -29,6 +29,12 @@ class VideoGenerator:
         self.settings = settings
         self.client = httpx.AsyncClient()
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
     async def generate_async(
         self,
         prompt: str,
@@ -84,13 +90,9 @@ class VideoGenerator:
         """
         import asyncio
 
-        return asyncio.run(
-            self.generate_async(prompt, output_dir, duration, fps)
-        )
+        return asyncio.run(self.generate_async(prompt, output_dir, duration, fps))
 
-    async def _call_video_api(
-        self, prompt: str, duration: int, fps: int
-    ) -> dict:
+    async def _call_video_api(self, prompt: str, duration: int, fps: int) -> dict:
         """调用视频生成API"""
         # TODO: 实现实际的API调用
         # 这里是示例实现，需要替换为实际的API调用

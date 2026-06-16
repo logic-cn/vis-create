@@ -159,9 +159,7 @@ class VisCreateAgent:
         try:
             # 验证输入文件存在
             if not self.file_handler.file_exists(image_path):
-                return AgentResult(
-                    success=False, error=f"输入文件不存在: {image_path}"
-                )
+                return AgentResult(success=False, error=f"输入文件不存在: {image_path}")
 
             # 编辑图片
             result = self.image_generator.edit(
@@ -196,7 +194,10 @@ class VisCreateAgent:
             # 简单的关键词匹配
             user_input_lower = user_input.lower()
 
-            if any(word in user_input_lower for word in ["图片", "生成", "image", "generate"]):
+            if any(
+                word in user_input_lower
+                for word in ["图片", "生成", "image", "generate"]
+            ):
                 return "我可以帮你生成图片！请使用 `generate_image` 命令，或者告诉我你想要什么样的图片。"
             elif any(word in user_input_lower for word in ["视频", "video"]):
                 return "我可以帮你生成视频！请使用 `generate_video` 命令，或者告诉我你想要什么样的视频。"

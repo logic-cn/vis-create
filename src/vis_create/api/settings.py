@@ -1,6 +1,10 @@
 """
 设置API路由
+
+使用数据库持久化系统设置
 """
+
+import logging
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -8,8 +12,35 @@ from sqlalchemy.orm import Session
 
 from ..config.settings import Settings
 from ..database.connection import get_db
+from ..models.setting import SystemSetting
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 默认设置项定义
+DEFAULT_SETTINGS = {
+    "openai_model": {
+        "default": "gpt-4-turbo-preview",
+        "description": "OpenAI模型名称",
+    },
+    "video_model": {
+        "default": "gen-2",
+        "description": "视频生成模型名称",
+    },
+    "output_dir": {
+        "default": "./output",
+        "description": "默认输出目录",
+    },
+    "verbose": {
+        "default": "false",
+        "description": "是否显示详细日志",
+    },
+    "log_level": {
+        "default": "INFO",
+        "description": "日志级别",
+    },
+}
 
 
 class SettingsResponse(BaseModel):
@@ -45,42 +76,63 @@ class ApiTestResponse(BaseModel):
     message: str
 
 
+def _get_setting(db: Session, key: str) -> str:
+    """从数据库获取设置值，不存在则返回默认值"""
+    setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+    if setting and setting.value is not None:
+        return setting.value
+    return DEFAULT_SETTINGS.get(key, {}).get("default", "")
+
+
+def _set_setting(db: Session, key: str, value: str, description: str | None = None):
+    """设置或更新数据库中的配置项"""
+    setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+    if setting:
+        setting.value = value
+    else:
+        setting = SystemSetting(
+            key=key,
+            value=value,
+            description=description or DEFAULT_SETTINGS.get(key, {}).get("description"),
+        )
+        db.add(setting)
+
+
 @router.get("", response_model=SettingsResponse)
-def get_settings():
+def get_settings(db: Session = Depends(get_db)):
     """获取设置"""
-    settings = Settings()
     return SettingsResponse(
-        openai_model=settings.openai_model,
-        video_model=settings.video_model,
-        output_dir=settings.output_dir,
-        verbose=settings.verbose,
-        log_level=settings.log_level,
+        openai_model=_get_setting(db, "openai_model"),
+        video_model=_get_setting(db, "video_model"),
+        output_dir=_get_setting(db, "output_dir"),
+        verbose=_get_setting(db, "verbose").lower() == "true",
+        log_level=_get_setting(db, "log_level"),
     )
 
 
 @router.put("", response_model=SettingsResponse)
-def update_settings(data: SettingsUpdate):
-    """更新设置"""
-    # 注意：这里简化处理，实际应该持久化到配置文件或数据库
-    settings = Settings()
-
+def update_settings(data: SettingsUpdate, db: Session = Depends(get_db)):
+    """更新设置（持久化到数据库）"""
     if data.openai_model is not None:
-        settings.openai_model = data.openai_model
+        _set_setting(db, "openai_model", data.openai_model)
     if data.video_model is not None:
-        settings.video_model = data.video_model
+        _set_setting(db, "video_model", data.video_model)
     if data.output_dir is not None:
-        settings.output_dir = data.output_dir
+        _set_setting(db, "output_dir", data.output_dir)
     if data.verbose is not None:
-        settings.verbose = data.verbose
+        _set_setting(db, "verbose", str(data.verbose).lower())
     if data.log_level is not None:
-        settings.log_level = data.log_level
+        _set_setting(db, "log_level", data.log_level)
+
+    db.commit()
+    logger.info("Settings updated and persisted to database")
 
     return SettingsResponse(
-        openai_model=settings.openai_model,
-        video_model=settings.video_model,
-        output_dir=settings.output_dir,
-        verbose=settings.verbose,
-        log_level=settings.log_level,
+        openai_model=_get_setting(db, "openai_model"),
+        video_model=_get_setting(db, "video_model"),
+        output_dir=_get_setting(db, "output_dir"),
+        verbose=_get_setting(db, "verbose").lower() == "true",
+        log_level=_get_setting(db, "log_level"),
     )
 
 
@@ -102,6 +154,8 @@ def test_api_connection(data: ApiTestRequest):
     if data.provider == "stability":
         if settings.stability_api_key:
             return ApiTestResponse(success=True, message="Stability API key configured")
-        return ApiTestResponse(success=False, message="Stability API key not configured")
+        return ApiTestResponse(
+            success=False, message="Stability API key not configured"
+        )
 
     return ApiTestResponse(success=False, message=f"Unknown provider: {data.provider}")

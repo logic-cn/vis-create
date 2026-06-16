@@ -20,7 +20,7 @@ from fastapi import (
     Form,
     Query,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..config.settings import Settings
@@ -156,10 +156,18 @@ def delete_project(project_id: str, db: Session = Depends(get_db)):
             delete_file(char.avatar_path)
 
     # 级联删除关联数据
+    # 先删除 Scene（通过 Chapter 关联）
+    db.query(Scene).filter(
+        Scene.chapter_id.in_(db.query(Chapter.id).filter(
+            Chapter.script_id.in_(db.query(Script.id).filter(Script.project_id == pid))
+        ))
+    ).delete(synchronize_session=False)
     db.query(Chapter).filter(
         Chapter.script_id.in_(db.query(Script.id).filter(Script.project_id == pid))
     ).delete(synchronize_session=False)
     db.query(Script).filter(Script.project_id == pid).delete(synchronize_session=False)
+    # 删除关联的 Artwork
+    db.query(Artwork).filter(Artwork.project_id == pid).delete(synchronize_session=False)
     db.query(Character).filter(Character.project_id == pid).delete(
         synchronize_session=False
     )
@@ -809,7 +817,7 @@ class SceneBreakdownRequest(BaseModel):
     """AI拆解分镜请求"""
 
     chapter_content: Optional[str] = None
-    max_scenes: int = 10
+    max_scenes: int = Field(default=10, ge=1, le=50, description="最大场景数")
 
 
 class SceneBreakdownResult(BaseModel):
@@ -894,7 +902,7 @@ async def breakdown_chapter_to_scenes(
                         if isinstance(text_model.config, str)
                         else text_model.config
                     )
-                except:
+                except (json.JSONDecodeError, TypeError):
                     pass
 
     # 回退到 .env 配置

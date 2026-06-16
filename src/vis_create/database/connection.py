@@ -13,6 +13,7 @@ from ..config.settings import Settings
 
 class Base(DeclarativeBase):
     """SQLAlchemy基类"""
+
     pass
 
 
@@ -28,7 +29,7 @@ def get_engine():
         settings = Settings()
         database_url = os.getenv(
             "DATABASE_URL",
-            f"postgresql://{settings.db_user}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}"
+            f"postgresql://{settings.db_user}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}",
         )
         _engine = create_engine(database_url, echo=settings.verbose)
     return _engine

@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useTaskStore } from "../stores/taskStore";
 import { taskService } from "../services/taskService";
 import TaskCard from "../components/tasks/TaskCard";
 
 export default function TasksPage() {
   const { tasks, isLoading, setTasks, setLoading } = useTaskStore();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadTasks();
@@ -12,22 +13,36 @@ export default function TasksPage() {
 
   async function loadTasks() {
     setLoading(true);
+    setError(null);
     try {
       const response = await taskService.list();
       setTasks(response.data);
     } catch (err) {
+      const message = err instanceof Error ? err.message : "加载任务失败";
+      setError(message);
       console.error("Failed to load tasks:", err);
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleDelete(id: string) {
+    try {
+      await taskService.delete(id);
+      loadTasks();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "删除任务失败";
+      setError(message);
+      console.error("Failed to delete task:", err);
+    }
+  }
+
   const activeTasks = tasks.filter(
-    (t) => t.status === "processing" || t.status === "pending"
+    (t) => t.status === "processing" || t.status === "pending",
   );
   const completedTasks = tasks.filter((t) => t.status === "completed");
   const failedTasks = tasks.filter(
-    (t) => t.status === "failed" || t.status === "paused"
+    (t) => t.status === "failed" || t.status === "paused",
   );
 
   return (
@@ -43,6 +58,19 @@ export default function TasksPage() {
           刷新
         </button>
       </div>
+
+      {/* 错误提示 */}
+      {error && (
+        <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-400 hover:text-red-300"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
@@ -63,7 +91,12 @@ export default function TasksPage() {
               </h2>
               <div className="space-y-3">
                 {activeTasks.map((task) => (
-                  <TaskCard key={task.id} task={task} onUpdate={loadTasks} />
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onUpdate={loadTasks}
+                    onDelete={handleDelete}
+                  />
                 ))}
               </div>
             </section>
@@ -76,7 +109,12 @@ export default function TasksPage() {
               </h2>
               <div className="space-y-3">
                 {completedTasks.map((task) => (
-                  <TaskCard key={task.id} task={task} onUpdate={loadTasks} />
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onUpdate={loadTasks}
+                    onDelete={handleDelete}
+                  />
                 ))}
               </div>
             </section>
@@ -89,7 +127,12 @@ export default function TasksPage() {
               </h2>
               <div className="space-y-3">
                 {failedTasks.map((task) => (
-                  <TaskCard key={task.id} task={task} onUpdate={loadTasks} />
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onUpdate={loadTasks}
+                    onDelete={handleDelete}
+                  />
                 ))}
               </div>
             </section>

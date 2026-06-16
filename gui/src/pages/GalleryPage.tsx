@@ -1,13 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useArtworkStore } from "../stores/artworkStore";
 import { artworkService } from "../services/artworkService";
 import ArtworkCard from "../components/gallery/ArtworkCard";
+import PreviewModal from "../components/gallery/PreviewModal";
 
 export default function GalleryPage() {
   const navigate = useNavigate();
   const { artworks, isLoading, setArtworks, setLoading, setError } =
     useArtworkStore();
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   useEffect(() => {
     loadArtworks();
@@ -24,6 +26,9 @@ export default function GalleryPage() {
       setLoading(false);
     }
   }
+
+  const previewArtwork =
+    previewIndex !== null ? (artworks[previewIndex] ?? null) : null;
 
   return (
     <div>
@@ -50,11 +55,27 @@ export default function GalleryPage() {
           <p className="text-text-muted text-sm mt-1">点击上方按钮开始创作</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {artworks.map((artwork) => (
-            <ArtworkCard key={artwork.id} artwork={artwork} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {artworks.map((artwork, index) => (
+              <ArtworkCard
+                key={artwork.id}
+                artwork={artwork}
+                onClick={() => setPreviewIndex(index)}
+              />
+            ))}
+          </div>
+          <PreviewModal
+            artwork={previewArtwork}
+            onClose={() => setPreviewIndex(null)}
+            onPrev={() => setPreviewIndex((i) => (i !== null ? i - 1 : null))}
+            onNext={() => setPreviewIndex((i) => (i !== null ? i + 1 : null))}
+            hasPrev={previewIndex !== null && previewIndex > 0}
+            hasNext={
+              previewIndex !== null && previewIndex < artworks.length - 1
+            }
+          />
+        </>
       )}
     </div>
   );

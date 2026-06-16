@@ -171,7 +171,10 @@ class ImageHandler:
             elif position == "bottom-left":
                 x, y = margin, img.height - text_height - margin
             elif position == "bottom-right":
-                x, y = img.width - text_width - margin, img.height - text_height - margin
+                x, y = (
+                    img.width - text_width - margin,
+                    img.height - text_height - margin,
+                )
             else:  # center
                 x = (img.width - text_width) // 2
                 y = (img.height - text_height) // 2

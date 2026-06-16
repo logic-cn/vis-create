@@ -7,9 +7,9 @@ import os
 import uuid
 import asyncio
 import logging
-from typing import Generator, Optional
+from typing import AsyncGenerator, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _process_task(task_id: uuid.UUID) -> None:
-    """后台处理任务"""
+async def _process_task(task_id: uuid.UUID) -> None:
+    """后台处理任务（异步版本）"""
     logger.info("Background task started for %s", task_id)
     SessionLocal = get_session_factory()
     db = SessionLocal()
@@ -108,25 +108,22 @@ def _process_task(task_id: uuid.UUID) -> None:
                         else:
                             generator_result = ("openai", None, provider, model_config)
 
-            # 模拟进度更新（API调用前）
-            for progress in [20.0, 30.0, 40.0]:
-                task = db.query(Task).filter(Task.id == task_id).first()
-                if not task or task.status == TaskStatus.FAILED:
-                    db.close()
-                    return
-                task.progress = progress
-                db.commit()
-                asyncio.run(asyncio.sleep(1))
+            # 更新进度（API调用前）
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if not task or task.status == TaskStatus.FAILED:
+                db.close()
+                return
+            task.progress = 40.0
+            db.commit()
 
             # 调用对应的生成器
             if generator_result and generator_result[0] == "comfyui":
                 _, model_name, provider, model_config = generator_result
-                comfyui_gen = ComfyUIGenerator(
+                async with ComfyUIGenerator(
                     base_url=provider.base_url or "http://localhost:8188",
                     api_key=provider.api_key,
-                )
-                result = asyncio.run(
-                    comfyui_gen.generate(
+                ) as comfyui_gen:
+                    result = await comfyui_gen.generate(
                         prompt=enhanced_prompt,
                         model_name=model_name,
                         output_dir=settings.output_dir,
@@ -134,21 +131,18 @@ def _process_task(task_id: uuid.UUID) -> None:
                         size=params.get("size", "1024x1024"),
                         config=model_config,
                     )
-                )
             else:
                 # 默认使用 OpenAI
-                openai_gen = ImageGenerator(settings)
-                # 获取参考图URL
-                reference_image_url = params.get("referenceImageUrl")
-                result = asyncio.run(
-                    openai_gen.generate_async(
+                async with ImageGenerator(settings) as openai_gen:
+                    # 获取参考图URL
+                    reference_image_url = params.get("referenceImageUrl")
+                    result = await openai_gen.generate_async(
                         prompt=enhanced_prompt,
                         output_dir=settings.output_dir,
                         style=params.get("style", "realistic"),
                         size=params.get("size", "1024x1024"),
                         reference_image_url=reference_image_url,
                     )
-                )
 
             # 检查任务是否被取消
             task = db.query(Task).filter(Task.id == task_id).first()
@@ -245,12 +239,23 @@ def _process_task(task_id: uuid.UUID) -> None:
 
 
 @router.get("", response_model=TaskListResponse)
-def list_tasks(db: Session = Depends(get_db)):
+def list_tasks(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
     """获取任务列表"""
-    tasks = db.query(Task).order_by(Task.created_at.desc()).all()
+    total = db.query(Task).count()
+    tasks = (
+        db.query(Task)
+        .order_by(Task.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
     return TaskListResponse(
-        data=[TaskResponse.from_orm(t) for t in tasks],
-        total=len(tasks),
+        data=[TaskResponse.model_validate(t) for t in tasks],
+        total=total,
     )
 
 
@@ -260,7 +265,7 @@ def get_task(task_id: str, db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return TaskResponse.from_orm(task)
+    return TaskResponse.model_validate(task)
 
 
 @router.post("", response_model=TaskResponse, status_code=201)
@@ -288,7 +293,7 @@ def create_task(
 
     background_tasks.add_task(_process_task, task.id)
 
-    return TaskResponse.from_orm(task)
+    return TaskResponse.model_validate(task)
 
 
 @router.put("/{task_id}/pause", response_model=TaskResponse)
@@ -304,7 +309,7 @@ def pause_task(task_id: str, db: Session = Depends(get_db)):
     task.status = TaskStatus.PAUSED
     db.commit()
     db.refresh(task)
-    return TaskResponse.from_orm(task)
+    return TaskResponse.model_validate(task)
 
 
 @router.put("/{task_id}/resume", response_model=TaskResponse)
@@ -320,7 +325,7 @@ def resume_task(task_id: str, db: Session = Depends(get_db)):
     task.status = TaskStatus.PROCESSING
     db.commit()
     db.refresh(task)
-    return TaskResponse.from_orm(task)
+    return TaskResponse.model_validate(task)
 
 
 @router.delete("/{task_id}", status_code=204)
@@ -353,26 +358,31 @@ def delete_task(task_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{task_id}/events")
-async def task_events(task_id: str, db: Session = Depends(get_db)):
+async def task_events(task_id: str):
     """SSE进度推送"""
-    task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    async def event_generator() -> Generator[str, None, None]:
+    # 在 SSE 端点中，每个迭代创建独立的 session
+    async def event_generator() -> AsyncGenerator[str, None]:
+        SessionLocal = get_session_factory()
         while True:
-            db.refresh(task)
+            db = SessionLocal()
+            try:
+                task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
+                if not task:
+                    yield f"event: error\ndata: {{\"error\": \"Task not found\"}}\n\n"
+                    break
 
-            event = TaskProgressEvent(
-                task_id=str(task.id),
-                status=task.status,
-                progress=task.progress,
-            )
+                event = TaskProgressEvent(
+                    task_id=str(task.id),
+                    status=task.status,
+                    progress=task.progress,
+                )
 
-            yield f"event: {task.status.value}\ndata: {event.json()}\n\n"
+                yield f"event: {task.status.value}\ndata: {event.model_dump_json()}\n\n"
 
-            if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
-                break
+                if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
+                    break
+            finally:
+                db.close()
 
             await asyncio.sleep(1)
 
@@ -395,8 +405,8 @@ class ImageEditRequest(BaseModel):
     mask_path: Optional[str] = None
 
 
-def _process_edit_task(task_id: uuid.UUID) -> None:
-    """后台处理图片编辑任务"""
+async def _process_edit_task(task_id: uuid.UUID) -> None:
+    """后台处理图片编辑任务（异步版本）"""
     logger.info("Background edit task started for %s", task_id)
     SessionLocal = get_session_factory()
     db = SessionLocal()
@@ -417,15 +427,13 @@ def _process_edit_task(task_id: uuid.UUID) -> None:
         params = task.parameters or {}
 
         # 创建图片生成器并执行编辑
-        image_gen = ImageGenerator(settings)
-        result = asyncio.run(
-            image_gen.edit_async(
+        async with ImageGenerator(settings) as image_gen:
+            result = await image_gen.edit_async(
                 image_path=params.get("image_path", ""),
                 instruction=task.prompt,
                 output_path=params.get("output_path"),
                 mask_path=params.get("mask_path"),
             )
-        )
 
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task or task.status == TaskStatus.FAILED:
@@ -497,4 +505,4 @@ def edit_image(
 
     background_tasks.add_task(_process_edit_task, task.id)
 
-    return TaskResponse.from_orm(task)
+    return TaskResponse.model_validate(task)

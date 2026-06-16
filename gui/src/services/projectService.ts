@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, BASE_URL } from "./api";
 import type {
   Project,
   ProjectListResponse,
@@ -56,7 +56,7 @@ export const projectService = {
     if (name) formData.append("name", name);
 
     const response = await fetch(
-      `http://localhost:8000${BASE}/${projectId}/assets`,
+      `${BASE_URL}${BASE}/${projectId}/assets`,
       { method: "POST", body: formData },
     );
     if (!response.ok) {
@@ -94,7 +94,7 @@ export const projectService = {
     formData.append("file", file);
 
     const response = await fetch(
-      `http://localhost:8000${BASE}/${projectId}/characters/${characterId}/avatar`,
+      `${BASE_URL}${BASE}/${projectId}/characters/${characterId}/avatar`,
       { method: "POST", body: formData },
     );
     if (!response.ok) {

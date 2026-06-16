@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, BASE_URL } from "./api";
 import { Task, TaskListResponse, TaskCreateParams } from "../types/task";
 
 export const taskService = {
@@ -17,6 +17,6 @@ export const taskService = {
   delete: (id: string) => api.delete(`/api/tasks/${id}/delete`),
 
   getEventSource: (id: string) => {
-    return new EventSource(`http://localhost:8000/api/tasks/${id}/events`);
+    return new EventSource(`${BASE_URL}/api/tasks/${id}/events`);
   },
 };

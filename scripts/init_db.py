@@ -198,7 +198,7 @@ class Model(Base):
     name = Column(String(200), nullable=False)
     display_name = Column(String(300), nullable=False)
     model_type = Column(
-        SQLEnum("text_to_image", "text_to_video", "image_to_image", "image_to_video", name="model_type"),
+        SQLEnum("text_to_image", "text_to_video", "image_to_image", "image_to_video", "text_generation", name="model_type"),
         nullable=False,
     )
     description = Column(Text, nullable=True)
@@ -206,6 +206,16 @@ class Model(Base):
     is_enabled = Column(Boolean, default=True, nullable=False)
     is_default = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SystemSetting(Base):
+    """系统设置表"""
+    __tablename__ = "system_settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
@@ -227,7 +237,7 @@ def init_database():
         conn.execute(text("DO $$ BEGIN CREATE TYPE asset_type AS ENUM ('image', 'video'); EXCEPTION WHEN duplicate_object THEN null; END $$;"))
         conn.execute(text("DO $$ BEGIN CREATE TYPE asset_source AS ENUM ('generated', 'uploaded'); EXCEPTION WHEN duplicate_object THEN null; END $$;"))
         conn.execute(text("DO $$ BEGIN CREATE TYPE provider_type AS ENUM ('cloud', 'local'); EXCEPTION WHEN duplicate_object THEN null; END $$;"))
-        conn.execute(text("DO $$ BEGIN CREATE TYPE model_type AS ENUM ('text_to_image', 'text_to_video', 'image_to_image', 'image_to_video'); EXCEPTION WHEN duplicate_object THEN null; END $$;"))
+        conn.execute(text("DO $$ BEGIN CREATE TYPE model_type AS ENUM ('text_to_image', 'text_to_video', 'image_to_image', 'image_to_video', 'text_generation'); EXCEPTION WHEN duplicate_object THEN null; END $$;"))
         conn.commit()
 
     # 创建表

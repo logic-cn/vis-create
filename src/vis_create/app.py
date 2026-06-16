@@ -2,11 +2,19 @@
 FastAPI应用入口
 """
 
-from fastapi import FastAPI
+import logging
+import os
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .api.router import api_router
 from .database.connection import init_db
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="VisCreate API",
@@ -26,10 +34,29 @@ app.add_middleware(
 # 注册路由
 app.include_router(api_router)
 
+# 静态文件服务（生成的图片/视频）
+output_dir = os.getenv("OUTPUT_DIR", "./output")
+os.makedirs(output_dir, exist_ok=True)
+app.mount("/static/outputs", StaticFiles(directory=output_dir), name="outputs")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """自定义验证错误处理器"""
+    logger.error(f"Validation error: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
+
 
 @app.on_event("startup")
 def startup():
     """应用启动时初始化数据库"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
     init_db()
 
 

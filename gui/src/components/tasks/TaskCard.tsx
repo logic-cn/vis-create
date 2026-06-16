@@ -5,9 +5,10 @@ import { useTaskStore } from "../../stores/taskStore";
 interface TaskCardProps {
   task: Task;
   onUpdate: () => void;
+  onDelete: (id: string) => void;
 }
 
-export default function TaskCard({ task, onUpdate }: TaskCardProps) {
+export default function TaskCard({ task, onUpdate, onDelete }: TaskCardProps) {
   const { updateTaskProgress } = useTaskStore();
 
   async function handlePause() {
@@ -60,8 +61,12 @@ export default function TaskCard({ task, onUpdate }: TaskCardProps) {
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">{task.type === "video" ? "🎬" : "🖼️"}</span>
-            <span className={`text-xs font-medium ${statusColors[task.status]}`}>
+            <span className="text-lg">
+              {task.type === "video" ? "🎬" : "🖼️"}
+            </span>
+            <span
+              className={`text-xs font-medium ${statusColors[task.status]}`}
+            >
               {statusLabels[task.status]}
             </span>
           </div>
@@ -73,18 +78,39 @@ export default function TaskCard({ task, onUpdate }: TaskCardProps) {
 
         <div className="flex gap-2 ml-4">
           {task.status === "processing" && (
-            <button onClick={handlePause} className="btn-secondary text-xs px-3 py-1.5">
+            <button
+              onClick={handlePause}
+              className="btn-secondary text-xs px-3 py-1.5"
+            >
               暂停
             </button>
           )}
           {task.status === "paused" && (
-            <button onClick={handleResume} className="btn-secondary text-xs px-3 py-1.5">
+            <button
+              onClick={handleResume}
+              className="btn-secondary text-xs px-3 py-1.5"
+            >
               恢复
             </button>
           )}
-          {(task.status === "processing" || task.status === "paused" || task.status === "pending") && (
-            <button onClick={handleCancel} className="btn-secondary text-xs px-3 py-1.5 text-accent-secondary">
+          {(task.status === "processing" ||
+            task.status === "paused" ||
+            task.status === "pending") && (
+            <button
+              onClick={handleCancel}
+              className="btn-secondary text-xs px-3 py-1.5 text-accent-secondary"
+            >
               取消
+            </button>
+          )}
+          {(task.status === "completed" ||
+            task.status === "failed" ||
+            task.status === "paused") && (
+            <button
+              onClick={() => onDelete(task.id)}
+              className="btn-secondary text-xs px-3 py-1.5 text-accent-secondary"
+            >
+              删除
             </button>
           )}
         </div>
@@ -106,7 +132,9 @@ export default function TaskCard({ task, onUpdate }: TaskCardProps) {
       )}
 
       {task.error_message && (
-        <p className="text-xs text-accent-secondary mt-2">{task.error_message}</p>
+        <p className="text-xs text-accent-secondary mt-2">
+          {task.error_message}
+        </p>
       )}
     </div>
   );

@@ -74,6 +74,7 @@ class VideoHandler:
                 frame_path = os.path.join(output_dir, f"frame_{i:04d}.png")
 
                 from PIL import Image
+
                 img = Image.fromarray(frame)
                 img.save(frame_path)
                 frame_paths.append(frame_path)
