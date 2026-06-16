@@ -1,6 +1,13 @@
 import { api, BASE_URL } from "./api";
 import { Task, TaskListResponse, TaskCreateParams } from "../types/task";
 
+export interface ImageEditParams {
+  image_path: string;
+  instruction: string;
+  output_path?: string;
+  mask_path?: string;
+}
+
 export const taskService = {
   list: () => api.get<TaskListResponse>("/api/tasks"),
 
@@ -15,6 +22,9 @@ export const taskService = {
   cancel: (id: string) => api.delete(`/api/tasks/${id}`),
 
   delete: (id: string) => api.delete(`/api/tasks/${id}/delete`),
+
+  editImage: (data: ImageEditParams) =>
+    api.post<Task>("/api/tasks/edit", data),
 
   getEventSource: (id: string) => {
     return new EventSource(`${BASE_URL}/api/tasks/${id}/events`);

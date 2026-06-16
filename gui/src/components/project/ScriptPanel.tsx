@@ -262,6 +262,22 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
     }
   }
 
+  async function handleGenerateSceneArtwork(sceneId: string) {
+    if (!script || !selectedChapter) return;
+    try {
+      await projectService.generateSceneArtwork(
+        projectId,
+        script.id,
+        selectedChapter.id,
+        sceneId,
+      );
+      alert("已创建生成任务，请在任务队列中查看进度");
+    } catch (err) {
+      console.error("Generate scene artwork failed:", err);
+      alert("创建生成任务失败");
+    }
+  }
+
   async function handleUpdateScene() {
     if (!script || !selectedChapter || !editingScene) return;
     try {
@@ -825,6 +841,13 @@ export default function ScriptPanel({ projectId }: ScriptPanelProps) {
                         )}
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => handleGenerateSceneArtwork(scene.id)}
+                          className="p-1 rounded text-text-muted hover:text-accent-primary transition-colors"
+                          title="生成作品"
+                        >
+                          🎨
+                        </button>
                         <button
                           onClick={() => setEditingScene(scene)}
                           className="p-1 rounded text-text-muted hover:text-text-secondary transition-colors"

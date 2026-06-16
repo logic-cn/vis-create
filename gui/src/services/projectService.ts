@@ -109,6 +109,46 @@ export const projectService = {
   deleteCharacter: (projectId: string, characterId: string) =>
     api.delete(`${BASE}/${projectId}/characters/${characterId}`),
 
+  uploadCharacterReferenceImage: async (
+    projectId: string,
+    characterId: string,
+    file: File,
+  ) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(
+      `${BASE_URL}${BASE}/${projectId}/characters/${characterId}/reference-images`,
+      { method: "POST", body: formData },
+    );
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ detail: "Upload failed" }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json() as Promise<Character>;
+  },
+
+  deleteCharacterReferenceImage: (
+    projectId: string,
+    characterId: string,
+    imageIndex: number,
+  ) =>
+    api.delete(
+      `${BASE}/${projectId}/characters/${characterId}/reference-images/${imageIndex}`,
+    ),
+
+  lockCharacterAvatar: (
+    projectId: string,
+    characterId: string,
+    artworkId: string,
+  ) =>
+    api.post<Character>(
+      `${BASE}/${projectId}/characters/${characterId}/lock-avatar`,
+      { artwork_id: artworkId },
+    ),
+
   // ── 剧本 ──
   listScripts: (projectId: string) =>
     api.get<ScriptListResponse>(`${BASE}/${projectId}/scripts`),
@@ -215,5 +255,16 @@ export const projectService = {
   ) =>
     api.delete(
       `${BASE}/${projectId}/scripts/${scriptId}/chapters/${chapterId}/scenes/${sceneId}`,
+    ),
+
+  generateSceneArtwork: (
+    projectId: string,
+    scriptId: string,
+    chapterId: string,
+    sceneId: string,
+  ) =>
+    api.post<Scene>(
+      `${BASE}/${projectId}/scripts/${scriptId}/chapters/${chapterId}/scenes/${sceneId}/generate-artwork`,
+      {},
     ),
 };

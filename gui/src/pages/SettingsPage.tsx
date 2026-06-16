@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { modelService } from "../services/modelService";
+import { settingsService } from "../services/settingsService";
 import { useModelStore } from "../stores/modelStore";
 import type {
   ModelProvider,
@@ -140,6 +141,20 @@ export default function SettingsPage() {
       const message = err instanceof Error ? err.message : "删除失败";
       setError(message);
       console.error("Delete provider failed:", err);
+    }
+  }
+
+  async function handleTestApiConnection(providerName: string) {
+    try {
+      const result = await settingsService.testApiConnection(providerName);
+      if (result.success) {
+        alert(`✅ ${result.message}`);
+      } else {
+        alert(`❌ ${result.message}`);
+      }
+    } catch (err) {
+      alert("测试连接失败");
+      console.error("Test API connection failed:", err);
     }
   }
 
@@ -573,6 +588,14 @@ export default function SettingsPage() {
                               className="px-3 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-secondary hover:text-text-primary transition-colors border border-white/5"
                             >
                               编辑
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleTestApiConnection(provider.name)
+                              }
+                              className="px-3 py-1.5 rounded-lg bg-bg-secondary text-xs text-accent-primary hover:bg-accent-primary/10 transition-colors border border-white/5"
+                            >
+                              测试连接
                             </button>
                             <button
                               onClick={() => handleDeleteProvider(provider.id)}

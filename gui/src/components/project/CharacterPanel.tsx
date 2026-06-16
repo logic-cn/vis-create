@@ -102,6 +102,42 @@ export default function CharacterPanel({ projectId }: CharacterPanelProps) {
     }
   }
 
+  async function handleReferenceImageUpload(
+    characterId: string,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const updated = await projectService.uploadCharacterReferenceImage(
+        projectId,
+        characterId,
+        file,
+      );
+      updateCharacter(updated);
+    } catch (err) {
+      console.error("Reference image upload failed:", err);
+    }
+  }
+
+  async function handleDeleteReferenceImage(
+    characterId: string,
+    imageIndex: number,
+  ) {
+    try {
+      await projectService.deleteCharacterReferenceImage(
+        projectId,
+        characterId,
+        imageIndex,
+      );
+      // Reload characters to get updated reference images
+      const res = await projectService.listCharacters(projectId);
+      setCharacters(res.data);
+    } catch (err) {
+      console.error("Delete reference image failed:", err);
+    }
+  }
+
   const imageAssets = assets.filter((a) => a.type === "image");
 
   return (
@@ -323,6 +359,49 @@ export default function CharacterPanel({ projectId }: CharacterPanelProps) {
                 >
                   ×
                 </button>
+              </div>
+
+              {/* 参考图区域 */}
+              <div className="mt-3 pt-3 border-t border-white/5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-text-muted">参考图</span>
+                  <label className="px-2 py-1 rounded bg-bg-secondary text-[10px] text-text-secondary hover:text-text-primary transition-colors border border-white/5 cursor-pointer">
+                    + 添加
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        handleReferenceImageUpload(char.id, e)
+                      }
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                {char.reference_images && char.reference_images.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {char.reference_images.map((img, idx) => (
+                      <div key={idx} className="relative group">
+                        <img
+                          src={img}
+                          alt={`参考图 ${idx + 1}`}
+                          className="w-14 h-14 rounded-lg object-cover border border-white/10"
+                        />
+                        <button
+                          onClick={() =>
+                            handleDeleteReferenceImage(char.id, idx)
+                          }
+                          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-text-muted">
+                    暂无参考图，上传后可保持角色一致性
+                  </p>
+                )}
               </div>
             </div>
           ))}
