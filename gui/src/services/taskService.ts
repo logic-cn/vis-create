@@ -8,8 +8,23 @@ export interface ImageEditParams {
   mask_path?: string;
 }
 
+export interface TaskListParams {
+  page?: number;
+  limit?: number;
+  status?: string;
+  type?: string;
+}
+
 export const taskService = {
-  list: () => api.get<TaskListResponse>("/api/tasks"),
+  list: (params?: TaskListParams) => {
+    const queryParams = new URLSearchParams({
+      page: String(params?.page || 1),
+      limit: String(params?.limit || 20),
+    });
+    if (params?.status) queryParams.append("status", params.status);
+    if (params?.type) queryParams.append("type", params.type);
+    return api.get<TaskListResponse>(`/api/tasks?${queryParams}`);
+  },
 
   get: (id: string) => api.get<Task>(`/api/tasks/${id}`),
 

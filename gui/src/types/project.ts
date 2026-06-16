@@ -67,6 +67,7 @@ export interface CharacterCreateParams {
   age?: number;
   personality?: string;
   description?: string;
+  visual_features?: string;
 }
 
 export interface CharacterUpdateParams {
@@ -75,6 +76,7 @@ export interface CharacterUpdateParams {
   personality?: string;
   description?: string;
   avatar_path?: string;
+  visual_features?: string;
 }
 
 export interface Script {

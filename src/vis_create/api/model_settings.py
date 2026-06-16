@@ -150,7 +150,9 @@ def update_provider(
     db: Session = Depends(get_db),
 ):
     """更新模型提供商"""
-    result = db.execute(select(ModelProvider).where(ModelProvider.id == provider_id))
+    result = db.execute(
+        select(ModelProvider).where(ModelProvider.id == uuid.UUID(provider_id))
+    )
     provider = result.scalar_one_or_none()
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")

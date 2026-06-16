@@ -1,24 +1,8 @@
 """创作参数 Pydantic Schema 定义"""
 
-from enum import Enum
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
-
-
-class StyleEnum(str, Enum):
-    """风格枚举"""
-
-    REALISTIC = "realistic"
-    ANIME = "anime"
-    CARTOON = "cartoon"
-    ARTISTIC = "artistic"
-    CYBERPUNK = "cyberpunk"
-    WATERCOLOR = "watercolor"
-    OIL_PAINTING = "oil_painting"
-    PIXEL = "pixel"
-    MINIMALIST = "minimalist"
-    VINTAGE = "vintage"
 
 
 class PhotographyParams(BaseModel):
@@ -76,9 +60,14 @@ class ChapterContext(BaseModel):
 
 
 class CreationParameters(BaseModel):
-    """创作参数完整定义"""
+    """创作参数完整定义
 
-    style: StyleEnum = Field(default=StyleEnum.REALISTIC, description="图片风格")
+    使用 extra="allow" 允许前端传递任意额外参数
+    """
+
+    model_config = {"extra": "allow"}
+
+    style: str = Field(default="realistic", description="图片风格")
     size: str = Field(default="1:1", description="图片尺寸比例")
     model_id: Optional[str] = Field(default=None, description="模型 ID")
 
@@ -100,3 +89,10 @@ class CreationParameters(BaseModel):
     referenceImageUrl: Optional[str] = Field(default=None, description="参考图片 URL")
     characterDescription: Optional[str] = Field(default=None, description="角色描述")
     chapterContext: Optional[Any] = Field(default=None, description="章节上下文")
+
+    # 场景和角色关联
+    scene_id: Optional[str] = Field(default=None, description="场景 ID")
+    character_id: Optional[str] = Field(default=None, description="角色 ID")
+    chapter_id: Optional[str] = Field(default=None, description="章节 ID")
+    referenceImages: Optional[list[str]] = Field(default=None, description="角色参考图列表")
+    sceneContext: Optional[Any] = Field(default=None, description="场景上下文")

@@ -3,20 +3,29 @@ import {
   Artwork,
   ArtworkListResponse,
   ArtworkCreateParams,
-  ArtworkFilters,
 } from "../types/artwork";
 
+export interface ArtworkListParams {
+  page?: number;
+  limit?: number;
+  type?: string;
+  style?: string;
+  sort?: string;
+  search?: string;
+  is_favorite?: boolean;
+}
+
 export const artworkService = {
-  list: (page = 1, limit = 20, filters?: ArtworkFilters) => {
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
+  list: (params?: ArtworkListParams) => {
+    const queryParams = new URLSearchParams({
+      page: String(params?.page || 1),
+      limit: String(params?.limit || 20),
     });
-    if (filters?.type) params.append("type", filters.type);
-    if (filters?.style) params.append("style", filters.style);
-    if (filters?.sort) params.append("sort", filters.sort);
-    if (filters?.search) params.append("search", filters.search);
-    return api.get<ArtworkListResponse>(`/api/artworks?${params}`);
+    if (params?.type) queryParams.append("type", params.type);
+    if (params?.style) queryParams.append("style", params.style);
+    if (params?.sort) queryParams.append("sort", params.sort);
+    if (params?.search) queryParams.append("search", params.search);
+    return api.get<ArtworkListResponse>(`/api/artworks?${queryParams}`);
   },
 
   get: (id: string) => api.get<Artwork>(`/api/artworks/${id}`),

@@ -38,6 +38,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _convert_video_params(size: str) -> tuple[str, str]:
+    """将前端的尺寸参数转换为视频生成器的 resolution 和 ratio
+
+    Args:
+        size: 前端尺寸参数，如 "16:9", "9:16", "1:1" 等
+
+    Returns:
+        tuple: (resolution, ratio)
+    """
+    # 尺寸到分辨率和宽高比的映射
+    size_map = {
+        "16:9": ("720P", "16:9"),
+        "9:16": ("720P", "9:16"),
+        "1:1": ("720P", "1:1"),
+        "4:3": ("720P", "4:3"),
+        "3:4": ("720P", "3:4"),
+        "21:9": ("720P", "21:9"),
+    }
+    return size_map.get(size, ("720P", "16:9"))
+
+
 async def _process_task(task_id: uuid.UUID) -> None:
     """后台处理任务（异步版本）"""
     logger.info("Background task started for %s", task_id)
@@ -227,13 +248,17 @@ async def _process_task(task_id: uuid.UUID) -> None:
             task.progress = 20.0
             db.commit()
 
+            # 转换前端参数到视频生成器参数
+            size = params.get("size", "16:9")
+            resolution, ratio = _convert_video_params(size)
+
             async with VideoGenerator(settings) as video_gen:
                 result = await video_gen.generate_async(
                     prompt=enhanced_prompt,
                     output_dir=settings.output_dir,
                     duration=params.get("duration", 5),
-                    resolution=params.get("resolution", "720P"),
-                    ratio=params.get("ratio", "16:9"),
+                    resolution=params.get("resolution", resolution),
+                    ratio=params.get("ratio", ratio),
                 )
 
             # 检查任务是否被取消
@@ -290,12 +315,22 @@ async def _process_task(task_id: uuid.UUID) -> None:
 def list_tasks(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None, description="按状态筛选"),
+    type: Optional[str] = Query(None, description="按类型筛选"),
     db: Session = Depends(get_db),
 ):
     """获取任务列表"""
-    total = db.query(Task).count()
+    query = db.query(Task)
+
+    # 筛选
+    if status:
+        query = query.filter(Task.status == status)
+    if type:
+        query = query.filter(Task.type == type)
+
+    total = query.count()
     tasks = (
-        db.query(Task)
+        query
         .order_by(Task.created_at.desc())
         .offset((page - 1) * limit)
         .limit(limit)

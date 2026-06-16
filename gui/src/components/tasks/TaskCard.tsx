@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Task } from "../../types/task";
 import { taskService } from "../../services/taskService";
 import { useTaskStore } from "../../stores/taskStore";
@@ -10,6 +11,54 @@ interface TaskCardProps {
 
 export default function TaskCard({ task, onUpdate, onDelete }: TaskCardProps) {
   const { updateTaskProgress } = useTaskStore();
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  // SSE 实时进度订阅
+  useEffect(() => {
+    if (task.status === "processing" || task.status === "pending") {
+      const eventSource = taskService.getEventSource(task.id);
+      eventSourceRef.current = eventSource;
+
+      eventSource.addEventListener("processing", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          updateTaskProgress(task.id, data.progress, "processing");
+        } catch (err) {
+          console.error("SSE parse error:", err);
+        }
+      });
+
+      eventSource.addEventListener("completed", (event) => {
+        try {
+          JSON.parse(event.data);
+          updateTaskProgress(task.id, 100, "completed");
+          eventSource.close();
+          onUpdate();
+        } catch (err) {
+          console.error("SSE parse error:", err);
+        }
+      });
+
+      eventSource.addEventListener("failed", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          updateTaskProgress(task.id, data.progress, "failed");
+          eventSource.close();
+          onUpdate();
+        } catch (err) {
+          console.error("SSE parse error:", err);
+        }
+      });
+
+      eventSource.onerror = () => {
+        eventSource.close();
+      };
+
+      return () => {
+        eventSource.close();
+      };
+    }
+  }, [task.id, task.status, updateTaskProgress, onUpdate]);
 
   async function handlePause() {
     try {

@@ -23,6 +23,7 @@ export default function CharacterPanel({ projectId }: CharacterPanelProps) {
     age: undefined,
     personality: "",
     description: "",
+    visual_features: "",
   });
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [showAssetPicker, setShowAssetPicker] = useState(false);
@@ -50,7 +51,7 @@ export default function CharacterPanel({ projectId }: CharacterPanelProps) {
         );
         updateCharacter(updated);
       }
-      setForm({ name: "", age: undefined, personality: "", description: "" });
+      setForm({ name: "", age: undefined, personality: "", description: "", visual_features: "" });
       setSelectedAvatar(null);
       setIsAdding(false);
     } catch (err) {
@@ -235,6 +236,15 @@ export default function CharacterPanel({ projectId }: CharacterPanelProps) {
                 }
                 placeholder="角色描述"
                 rows={3}
+                className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
+              />
+              <textarea
+                value={form.visual_features ?? ""}
+                onChange={(e) =>
+                  setForm({ ...form, visual_features: e.target.value })
+                }
+                placeholder="视觉特征描述（如：金色长发、蓝色眼睛、穿红色连衣裙），用于 AI 生成时保持角色一致性"
+                rows={2}
                 className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
               />
               <button
