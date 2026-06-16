@@ -1,30 +1,25 @@
 import { useState, useEffect } from "react";
 import { modelService } from "../services/modelService";
-import { settingsService } from "../services/settingsService";
 import { useModelStore } from "../stores/modelStore";
 import type {
-  ModelProvider,
   Model,
   ModelType,
-  ProviderType,
-  ModelProviderCreateParams,
   ModelCreateParams,
+  ProviderPreset,
 } from "../types/model";
 import {
-  CLOUD_PROVIDERS,
-  LOCAL_PROVIDERS,
+  PROVIDER_PRESETS,
   MODEL_TYPE_CONFIG,
+  DEFAULT_MODEL_TYPES,
 } from "../types/model";
 
-type SettingsTab = "providers" | "models" | "defaults";
+type SettingsTab = "models" | "defaults";
 
 export default function SettingsPage() {
   const {
     providers,
     setProviders,
     addProvider,
-    updateProvider,
-    removeProvider,
     models,
     setModels,
     addModel,
@@ -36,34 +31,24 @@ export default function SettingsPage() {
     setLoading,
   } = useModelStore();
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>("providers");
-  const [showAddProvider, setShowAddProvider] = useState(false);
-  const [showAddModel, setShowAddModel] = useState(false);
-  const [editingProvider, setEditingProvider] = useState<ModelProvider | null>(
-    null,
-  );
-  const [editingModel, setEditingModel] = useState<Model | null>(null);
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
-    null,
-  );
+  const [activeTab, setActiveTab] = useState<SettingsTab>("models");
   const [error, setError] = useState<string | null>(null);
 
-  // 表单状态
-  const [providerForm, setProviderForm] = useState<ModelProviderCreateParams>({
+  // 添加模型相关状态
+  const [showAddModel, setShowAddModel] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<ProviderPreset | null>(null);
+  const [isCustomProvider, setIsCustomProvider] = useState(false);
+  const [customProviderForm, setCustomProviderForm] = useState({
     name: "",
     display_name: "",
-    provider_type: "cloud",
     base_url: "",
     api_key: "",
-    description: "",
-    icon: "",
   });
   const [modelForm, setModelForm] = useState<ModelCreateParams>({
     provider_id: "",
     name: "",
     display_name: "",
     model_type: "text_to_image",
-    description: "",
   });
 
   useEffect(() => {
@@ -88,156 +73,120 @@ export default function SettingsPage() {
     }
   }
 
-  // ── 提供商操作 ──
+  // 获取供应商下的模型
+  function getProviderModels(providerId: string) {
+    return models.filter((m) => m.provider_id === providerId);
+  }
 
-  async function handleCreateProvider() {
-    if (!providerForm.name.trim() || !providerForm.display_name.trim()) return;
+  // 选择预设供应商
+  function handleSelectPreset(preset: ProviderPreset) {
+    setSelectedPreset(preset);
+    setIsCustomProvider(false);
+
+    // 检查是否已存在该供应商
+    const existingProvider = providers.find((p) => p.name === preset.name);
+    if (existingProvider) {
+      setModelForm({
+        ...modelForm,
+        provider_id: existingProvider.id,
+      });
+    } else {
+      // 创建供应商
+      handleCreateProviderFromPreset(preset);
+    }
+  }
+
+  // 从预设创建供应商
+  async function handleCreateProviderFromPreset(preset: ProviderPreset) {
+    try {
+      const provider = await modelService.createProvider({
+        name: preset.name,
+        display_name: preset.display_name,
+        provider_type: preset.provider_type,
+        base_url: preset.base_url,
+        icon: preset.icon,
+        description: preset.description,
+      });
+      addProvider(provider);
+      setModelForm({
+        ...modelForm,
+        provider_id: provider.id,
+      });
+    } catch (err) {
+      console.error("Create provider failed:", err);
+      setError("创建供应商失败");
+    }
+  }
+
+  // 创建自定义供应商并添加模型
+  async function handleCreateCustomProviderAndModel() {
+    if (!customProviderForm.name.trim() || !customProviderForm.display_name.trim()) {
+      setError("请填写供应商名称和显示名称");
+      return;
+    }
+    if (!modelForm.name.trim() || !modelForm.display_name.trim()) {
+      setError("请填写模型名称和显示名称");
+      return;
+    }
+
     setError(null);
     try {
-      // 清理空字符串字段，转换为 null
-      const cleanedData = {
-        ...providerForm,
-        base_url: providerForm.base_url || undefined,
-        api_key: providerForm.api_key || undefined,
-        description: providerForm.description || undefined,
-        icon: providerForm.icon || undefined,
-      };
-      const provider = await modelService.createProvider(cleanedData);
+      // 创建供应商
+      const provider = await modelService.createProvider({
+        name: customProviderForm.name,
+        display_name: customProviderForm.display_name,
+        provider_type: "cloud",
+        base_url: customProviderForm.base_url || undefined,
+        api_key: customProviderForm.api_key || undefined,
+      });
       addProvider(provider);
-      resetProviderForm();
-      setShowAddProvider(false);
-    } catch (err: unknown) {
+
+      // 创建模型
+      const model = await modelService.createModel({
+        ...modelForm,
+        provider_id: provider.id,
+      });
+      addModel(model);
+
+      // 重置表单
+      resetAddModelForm();
+    } catch (err) {
       const message = err instanceof Error ? err.message : "创建失败";
       setError(message);
-      console.error("Create provider failed:", err);
     }
   }
 
-  async function handleUpdateProvider() {
-    if (!editingProvider) return;
-    try {
-      const updated = await modelService.updateProvider(editingProvider.id, {
-        display_name: providerForm.display_name,
-        base_url: providerForm.base_url || undefined,
-        api_key: providerForm.api_key || undefined,
-        description: providerForm.description || undefined,
-        icon: providerForm.icon || undefined,
-      });
-      updateProvider(updated);
-      setEditingProvider(null);
-      resetProviderForm();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "更新失败";
-      setError(message);
-      console.error("Update provider failed:", err);
-    }
-  }
-
-  async function handleDeleteProvider(id: string) {
-    try {
-      await modelService.deleteProvider(id);
-      removeProvider(id);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "删除失败";
-      setError(message);
-      console.error("Delete provider failed:", err);
-    }
-  }
-
-  async function handleTestApiConnection(providerName: string) {
-    try {
-      const result = await settingsService.testApiConnection(providerName);
-      if (result.success) {
-        alert(`✅ ${result.message}`);
-      } else {
-        alert(`❌ ${result.message}`);
-      }
-    } catch (err) {
-      alert("测试连接失败");
-      console.error("Test API connection failed:", err);
-    }
-  }
-
-  function resetProviderForm() {
-    setProviderForm({
-      name: "",
-      display_name: "",
-      provider_type: "cloud",
-      base_url: "",
-      api_key: "",
-      description: "",
-      icon: "",
-    });
-  }
-
-  function startEditProvider(provider: ModelProvider) {
-    setEditingProvider(provider);
-    setProviderForm({
-      name: provider.name,
-      display_name: provider.display_name,
-      provider_type: provider.provider_type,
-      base_url: provider.base_url || "",
-      api_key: provider.api_key || "",
-      description: provider.description || "",
-      icon: provider.icon || "",
-    });
-  }
-
-  function addPresetProvider(preset: ModelProviderCreateParams) {
-    setProviderForm(preset);
-    setShowAddProvider(true);
-  }
-
-  // ── 模型操作 ──
-
-  async function handleCreateModel() {
-    if (
-      !modelForm.provider_id ||
-      !modelForm.name.trim() ||
-      !modelForm.display_name.trim()
-    )
+  // 添加模型到已有供应商
+  async function handleAddModel() {
+    if (!modelForm.provider_id || !modelForm.name.trim() || !modelForm.display_name.trim()) {
+      setError("请填写完整的模型信息");
       return;
+    }
+
+    setError(null);
     try {
       const model = await modelService.createModel(modelForm);
       addModel(model);
-      resetModelForm();
-      setShowAddModel(false);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "创建失败";
+      resetAddModelForm();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "添加模型失败";
       setError(message);
-      console.error("Create model failed:", err);
     }
   }
 
-  async function handleUpdateModel() {
-    if (!editingModel) return;
-    try {
-      const updated = await modelService.updateModel(editingModel.id, {
-        display_name: modelForm.display_name,
-        description: modelForm.description,
-      });
-      updateModel(updated);
-      setEditingModel(null);
-      resetModelForm();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "更新失败";
-      setError(message);
-      console.error("Update model failed:", err);
-    }
-  }
-
+  // 删除模型
   async function handleDeleteModel(id: string) {
     try {
       await modelService.deleteModel(id);
       removeModel(id);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "删除失败";
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "删除模型失败";
       setError(message);
-      console.error("Delete model failed:", err);
     }
   }
 
-  async function handleToggleModelDefault(model: Model) {
+  // 切换默认模型
+  async function handleToggleDefault(model: Model) {
     try {
       const updated = await modelService.updateModel(model.id, {
         is_default: !model.is_default,
@@ -246,52 +195,78 @@ export default function SettingsPage() {
       // 重新加载默认配置
       const defaults = await modelService.getDefaultModels();
       setDefaultModels(defaults);
-    } catch (err: unknown) {
+    } catch (err) {
       const message = err instanceof Error ? err.message : "设置默认模型失败";
       setError(message);
-      console.error("Toggle model default failed:", err);
     }
   }
 
-  function resetModelForm() {
+  // 设置默认模型
+  async function handleSetDefault(modelType: ModelType, modelId: string) {
+    try {
+      const fieldMap: Record<ModelType, string> = {
+        text_generation: "default_text_generation_model_id",
+        text_to_image: "default_image_model_id",
+        image_to_image: "default_image_to_image_model_id",
+        text_to_video: "default_video_model_id",
+        image_to_video: "default_image_to_video_model_id",
+      };
+
+      const updateData = {
+        [fieldMap[modelType]]: modelId || undefined,
+      };
+
+      const updated = await modelService.updateDefaultModels(updateData);
+      setDefaultModels(updated);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "设置默认模型失败";
+      setError(message);
+    }
+  }
+
+  // 获取默认模型ID
+  function getDefaultModelId(modelType: ModelType): string {
+    const fieldMap: Record<ModelType, string> = {
+      text_generation: "default_text_generation_model_id",
+      text_to_image: "default_image_model_id",
+      image_to_image: "default_image_to_image_model_id",
+      text_to_video: "default_video_model_id",
+      image_to_video: "default_image_to_video_model_id",
+    };
+    return (defaultModels as Record<string, string | undefined>)[fieldMap[modelType]] || "";
+  }
+
+  // 重置添加模型表单
+  function resetAddModelForm() {
+    setShowAddModel(false);
+    setSelectedPreset(null);
+    setIsCustomProvider(false);
+    setCustomProviderForm({
+      name: "",
+      display_name: "",
+      base_url: "",
+      api_key: "",
+    });
     setModelForm({
       provider_id: "",
       name: "",
       display_name: "",
       model_type: "text_to_image",
-      description: "",
     });
   }
 
-  function startEditModel(model: Model) {
-    setEditingModel(model);
-    setModelForm({
-      provider_id: model.provider_id,
-      name: model.name,
-      display_name: model.display_name,
-      model_type: model.model_type,
-      description: model.description || "",
-    });
-  }
-
-  // 获取提供商下的模型
-  function getProviderModels(providerId: string) {
-    return models.filter((m) => m.provider_id === providerId);
-  }
-
-  // 获取默认模型名称
-  function getDefaultModelName(type: ModelType): string {
-    const modelId =
-      type === "text_to_image"
-        ? defaultModels.default_image_model_id
-        : defaultModels.default_video_model_id;
-    if (!modelId) return "未设置";
-    const model = models.find((m) => m.id === modelId);
-    return model ? model.display_name : "未设置";
-  }
+  // 按供应商分组的模型
+  const providersWithModels = providers
+    .filter((p) => {
+      const providerModels = getProviderModels(p.id);
+      return providerModels.length > 0;
+    })
+    .map((p) => ({
+      provider: p,
+      models: getProviderModels(p.id),
+    }));
 
   const tabs = [
-    { id: "providers" as SettingsTab, label: "模型提供商", emoji: "🏢" },
     { id: "models" as SettingsTab, label: "模型管理", emoji: "🤖" },
     { id: "defaults" as SettingsTab, label: "默认模型", emoji: "⭐" },
   ];
@@ -302,7 +277,7 @@ export default function SettingsPage() {
       <div className="px-6 py-4 border-b border-white/10">
         <h1 className="text-2xl font-bold text-text-primary">模型设置</h1>
         <p className="text-text-secondary text-sm mt-1">
-          管理文生图、文生视频模型配置
+          管理 AI 模型和默认配置
         </p>
       </div>
 
@@ -346,399 +321,171 @@ export default function SettingsPage() {
           </div>
         ) : (
           <>
-            {/* 提供商管理 */}
-            {activeTab === "providers" && (
-              <div className="max-w-4xl mx-auto space-y-6">
-                {/* 快速添加预设提供商 */}
-                <div className="rounded-2xl bg-bg-tertiary/40 border border-white/5 p-5">
-                  <h3 className="text-base font-semibold text-text-primary mb-3">
-                    快速添加云服务商
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {CLOUD_PROVIDERS.map((preset) => (
-                      <button
-                        key={preset.name}
-                        onClick={() => addPresetProvider(preset)}
-                        className="px-3 py-1.5 rounded-lg bg-bg-secondary text-sm text-text-secondary hover:text-text-primary hover:bg-bg-secondary/80 transition-colors border border-white/5"
-                      >
-                        {preset.icon} {preset.display_name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl bg-bg-tertiary/40 border border-white/5 p-5">
-                  <h3 className="text-base font-semibold text-text-primary mb-3">
-                    快速添加本地模型
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {LOCAL_PROVIDERS.map((preset) => (
-                      <button
-                        key={preset.name}
-                        onClick={() => addPresetProvider(preset)}
-                        className="px-3 py-1.5 rounded-lg bg-bg-secondary text-sm text-text-secondary hover:text-text-primary hover:bg-bg-secondary/80 transition-colors border border-white/5"
-                      >
-                        {preset.icon} {preset.display_name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 添加/编辑提供商表单 */}
-                {(showAddProvider || editingProvider) && (
-                  <div className="rounded-2xl bg-bg-tertiary/40 border border-white/5 p-5">
-                    <h3 className="text-base font-semibold text-text-primary mb-4">
-                      {editingProvider ? "编辑提供商" : "添加提供商"}
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm text-text-secondary mb-1.5">
-                            提供商标识 *
-                          </label>
-                          <input
-                            type="text"
-                            value={providerForm.name}
-                            onChange={(e) =>
-                              setProviderForm({
-                                ...providerForm,
-                                name: e.target.value,
-                              })
-                            }
-                            placeholder="如：openai"
-                            disabled={!!editingProvider}
-                            className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 disabled:opacity-50"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-text-secondary mb-1.5">
-                            显示名称 *
-                          </label>
-                          <input
-                            type="text"
-                            value={providerForm.display_name}
-                            onChange={(e) =>
-                              setProviderForm({
-                                ...providerForm,
-                                display_name: e.target.value,
-                              })
-                            }
-                            placeholder="如：OpenAI"
-                            className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm text-text-secondary mb-1.5">
-                            类型
-                          </label>
-                          <select
-                            value={providerForm.provider_type}
-                            onChange={(e) =>
-                              setProviderForm({
-                                ...providerForm,
-                                provider_type: e.target.value as ProviderType,
-                              })
-                            }
-                            disabled={!!editingProvider}
-                            className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40 disabled:opacity-50"
-                          >
-                            <option value="cloud">云服务商</option>
-                            <option value="local">本地部署</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm text-text-secondary mb-1.5">
-                            图标
-                          </label>
-                          <input
-                            type="text"
-                            value={providerForm.icon || ""}
-                            onChange={(e) =>
-                              setProviderForm({
-                                ...providerForm,
-                                icon: e.target.value,
-                              })
-                            }
-                            placeholder="emoji 图标"
-                            className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
-                          />
-                        </div>
-                      </div>
-                      {providerForm.provider_type === "local" && (
-                        <div>
-                          <label className="block text-sm text-text-secondary mb-1.5">
-                            API 地址
-                          </label>
-                          <input
-                            type="text"
-                            value={providerForm.base_url || ""}
-                            onChange={(e) =>
-                              setProviderForm({
-                                ...providerForm,
-                                base_url: e.target.value,
-                              })
-                            }
-                            placeholder="http://localhost:11434"
-                            className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
-                          />
-                        </div>
-                      )}
-                      <div>
-                        <label className="block text-sm text-text-secondary mb-1.5">
-                          API 密钥
-                        </label>
-                        <input
-                          type="password"
-                          value={providerForm.api_key || ""}
-                          onChange={(e) =>
-                            setProviderForm({
-                              ...providerForm,
-                              api_key: e.target.value,
-                            })
-                          }
-                          placeholder="输入 API 密钥（本地模型可留空）"
-                          className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-text-secondary mb-1.5">
-                          描述
-                        </label>
-                        <textarea
-                          value={providerForm.description || ""}
-                          onChange={(e) =>
-                            setProviderForm({
-                              ...providerForm,
-                              description: e.target.value,
-                            })
-                          }
-                          placeholder="提供商描述"
-                          rows={2}
-                          className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
-                        />
-                      </div>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={
-                            editingProvider
-                              ? handleUpdateProvider
-                              : handleCreateProvider
-                          }
-                          disabled={
-                            !providerForm.name.trim() ||
-                            !providerForm.display_name.trim()
-                          }
-                          className="px-4 py-2 rounded-lg bg-accent-primary text-bg-primary text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
-                        >
-                          {editingProvider ? "保存修改" : "添加提供商"}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowAddProvider(false);
-                            setEditingProvider(null);
-                            resetProviderForm();
-                          }}
-                          className="px-4 py-2 rounded-lg bg-bg-tertiary text-text-secondary text-sm hover:text-text-primary transition-colors border border-white/5"
-                        >
-                          取消
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 提供商列表 */}
-                <div className="space-y-3">
-                  {providers.length === 0 ? (
-                    <div className="text-center py-12 rounded-2xl bg-bg-tertiary/40 border border-white/5">
-                      <p className="text-4xl mb-3">🏢</p>
-                      <p className="text-text-secondary">暂无模型提供商</p>
-                      <p className="text-xs text-text-muted mt-1">
-                        点击上方按钮添加提供商
-                      </p>
-                    </div>
-                  ) : (
-                    providers.map((provider) => (
-                      <div
-                        key={provider.id}
-                        className="rounded-2xl bg-bg-tertiary/40 border border-white/5 p-5"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl">
-                              {provider.icon || "🏢"}
-                            </span>
-                            <div>
-                              <h4 className="text-base font-semibold text-text-primary">
-                                {provider.display_name}
-                              </h4>
-                              <p className="text-xs text-text-muted">
-                                {provider.provider_type === "cloud"
-                                  ? "云服务商"
-                                  : "本地部署"}
-                                {provider.base_url && ` • ${provider.base_url}`}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => startEditProvider(provider)}
-                              className="px-3 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-secondary hover:text-text-primary transition-colors border border-white/5"
-                            >
-                              编辑
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleTestApiConnection(provider.name)
-                              }
-                              className="px-3 py-1.5 rounded-lg bg-bg-secondary text-xs text-accent-primary hover:bg-accent-primary/10 transition-colors border border-white/5"
-                            >
-                              测试连接
-                            </button>
-                            <button
-                              onClick={() => handleDeleteProvider(provider.id)}
-                              className="px-3 py-1.5 rounded-lg bg-bg-secondary text-xs text-red-400 hover:bg-red-500/10 transition-colors border border-white/5"
-                            >
-                              删除
-                            </button>
-                          </div>
-                        </div>
-                        {provider.description && (
-                          <p className="text-sm text-text-secondary mt-2">
-                            {provider.description}
-                          </p>
-                        )}
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {getProviderModels(provider.id).map((model) => (
-                            <span
-                              key={model.id}
-                              className={`px-2 py-1 rounded text-xs ${
-                                model.is_default
-                                  ? "bg-accent-primary/20 text-accent-primary border border-accent-primary/30"
-                                  : "bg-bg-secondary text-text-muted border border-white/5"
-                              }`}
-                            >
-                              {MODEL_TYPE_CONFIG[model.model_type].emoji}{" "}
-                              {model.display_name}
-                              {model.is_default && " ⭐"}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* 模型管理 */}
             {activeTab === "models" && (
               <div className="max-w-4xl mx-auto space-y-6">
+                {/* 添加模型按钮 */}
                 <div className="flex items-center justify-between">
-                  <div>
-                    <select
-                      value={selectedProviderId || ""}
-                      onChange={(e) =>
-                        setSelectedProviderId(e.target.value || null)
-                      }
-                      className="px-3 py-2 rounded-lg bg-bg-tertiary text-sm text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40"
-                    >
-                      <option value="">全部提供商</option>
-                      {providers.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.icon} {p.display_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <h2 className="text-lg font-semibold text-text-primary">
+                    已配置的模型
+                  </h2>
                   <button
                     onClick={() => setShowAddModel(true)}
-                    disabled={providers.length === 0}
-                    className="px-4 py-2 rounded-lg bg-accent-primary text-bg-primary text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                    className="px-4 py-2 rounded-lg bg-accent-primary text-bg-primary text-sm font-medium hover:opacity-90 transition-opacity"
                   >
                     + 添加模型
                   </button>
                 </div>
 
-                {/* 添加/编辑模型表单 */}
-                {(showAddModel || editingModel) && (
-                  <div className="rounded-2xl bg-bg-tertiary/40 border border-white/5 p-5">
+                {/* 添加模型表单 */}
+                {showAddModel && (
+                  <div className="rounded-2xl bg-bg-tertiary/40 border border-white/5 p-6">
                     <h3 className="text-base font-semibold text-text-primary mb-4">
-                      {editingModel ? "编辑模型" : "添加模型"}
+                      添加模型
                     </h3>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm text-text-secondary mb-1.5">
-                            所属提供商 *
-                          </label>
-                          <select
-                            value={modelForm.provider_id}
-                            onChange={(e) =>
-                              setModelForm({
-                                ...modelForm,
-                                provider_id: e.target.value,
-                              })
-                            }
-                            disabled={!!editingModel}
-                            className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40 disabled:opacity-50"
-                          >
-                            <option value="">选择提供商</option>
-                            {providers.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.icon} {p.display_name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm text-text-secondary mb-1.5">
-                            模型类型 *
-                          </label>
-                          <select
-                            value={modelForm.model_type}
-                            onChange={(e) =>
-                              setModelForm({
-                                ...modelForm,
-                                model_type: e.target.value as ModelType,
-                              })
-                            }
-                            disabled={!!editingModel}
-                            className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40 disabled:opacity-50"
-                          >
-                            {Object.entries(MODEL_TYPE_CONFIG).map(
-                              ([key, config]) => (
-                                <option key={key} value={key}>
-                                  {config.emoji} {config.label}
-                                </option>
-                              ),
-                            )}
-                          </select>
-                        </div>
+
+                    {/* 选择供应商 */}
+                    <div className="mb-6">
+                      <label className="block text-sm text-text-secondary mb-3">
+                        选择供应商
+                      </label>
+                      <div className="grid grid-cols-4 gap-3">
+                        {PROVIDER_PRESETS.map((preset) => {
+                          const existing = providers.find(
+                            (p) => p.name === preset.name
+                          );
+                          return (
+                            <button
+                              key={preset.name}
+                              onClick={() => handleSelectPreset(preset)}
+                              className={`p-3 rounded-xl border text-left transition-all ${
+                                selectedPreset?.name === preset.name
+                                  ? "border-accent-primary bg-accent-primary/10"
+                                  : "border-white/5 bg-bg-secondary hover:border-white/10"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <span>{preset.icon}</span>
+                                <span className="text-sm font-medium text-text-primary">
+                                  {preset.display_name}
+                                </span>
+                              </div>
+                              <div className="text-xs text-text-muted">
+                                {preset.description}
+                              </div>
+                              {existing && (
+                                <div className="text-xs text-accent-primary mt-1">
+                                  已配置
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                        <button
+                          onClick={() => {
+                            setSelectedPreset(null);
+                            setIsCustomProvider(true);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all ${
+                            isCustomProvider
+                              ? "border-accent-primary bg-accent-primary/10"
+                              : "border-white/5 bg-bg-secondary hover:border-white/10"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span>➕</span>
+                            <span className="text-sm font-medium text-text-primary">
+                              自定义
+                            </span>
+                          </div>
+                          <div className="text-xs text-text-muted">
+                            自定义 OpenAI 兼容 API
+                          </div>
+                        </button>
                       </div>
+                    </div>
+
+                    {/* 自定义供应商表单 */}
+                    {isCustomProvider && (
+                      <div className="mb-6 p-4 rounded-xl bg-bg-secondary border border-white/5 space-y-3">
+                        <h4 className="text-sm font-medium text-text-primary">
+                          自定义供应商信息
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <input
+                            type="text"
+                            value={customProviderForm.name}
+                            onChange={(e) =>
+                              setCustomProviderForm({
+                                ...customProviderForm,
+                                name: e.target.value,
+                              })
+                            }
+                            placeholder="标识 (如: my-api)"
+                            className="px-3 py-2 rounded-lg bg-bg-tertiary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                          />
+                          <input
+                            type="text"
+                            value={customProviderForm.display_name}
+                            onChange={(e) =>
+                              setCustomProviderForm({
+                                ...customProviderForm,
+                                display_name: e.target.value,
+                              })
+                            }
+                            placeholder="显示名称 (如: 我的API)"
+                            className="px-3 py-2 rounded-lg bg-bg-tertiary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={customProviderForm.base_url}
+                          onChange={(e) =>
+                            setCustomProviderForm({
+                              ...customProviderForm,
+                              base_url: e.target.value,
+                            })
+                          }
+                          placeholder="API Base URL (如: https://api.example.com/v1)"
+                          className="w-full px-3 py-2 rounded-lg bg-bg-tertiary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                        />
+                        <input
+                          type="password"
+                          value={customProviderForm.api_key}
+                          onChange={(e) =>
+                            setCustomProviderForm({
+                              ...customProviderForm,
+                              api_key: e.target.value,
+                            })
+                          }
+                          placeholder="API Key (可选)"
+                          className="w-full px-3 py-2 rounded-lg bg-bg-tertiary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                        />
+                      </div>
+                    )}
+
+                    {/* 模型信息表单 */}
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-medium text-text-primary">
+                        模型信息
+                      </h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm text-text-secondary mb-1.5">
+                          <label className="block text-xs text-text-muted mb-1">
                             模型标识 *
                           </label>
                           <input
                             type="text"
                             value={modelForm.name}
                             onChange={(e) =>
-                              setModelForm({
-                                ...modelForm,
-                                name: e.target.value,
-                              })
+                              setModelForm({ ...modelForm, name: e.target.value })
                             }
-                            placeholder="如：dall-e-3"
-                            disabled={!!editingModel}
-                            className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 disabled:opacity-50"
+                            placeholder="如: gpt-4-turbo"
+                            className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm text-text-secondary mb-1.5">
+                          <label className="block text-xs text-text-muted mb-1">
                             显示名称 *
                           </label>
                           <input
@@ -750,48 +497,80 @@ export default function SettingsPage() {
                                 display_name: e.target.value,
                               })
                             }
-                            placeholder="如：DALL-E 3"
+                            placeholder="如: GPT-4 Turbo"
                             className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-sm text-text-secondary mb-1.5">
-                          描述
+                        <label className="block text-xs text-text-muted mb-1">
+                          模型类型 *
                         </label>
-                        <textarea
-                          value={modelForm.description || ""}
+                        <select
+                          value={modelForm.model_type}
                           onChange={(e) =>
                             setModelForm({
                               ...modelForm,
-                              description: e.target.value,
+                              model_type: e.target.value as ModelType,
                             })
                           }
-                          placeholder="模型描述"
-                          rows={2}
-                          className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary placeholder:text-text-muted/50 border border-white/5 focus:outline-none focus:border-accent-primary/40 resize-none"
-                        />
+                          className="w-full px-3 py-2 rounded-lg bg-bg-secondary text-sm text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                        >
+                          {DEFAULT_MODEL_TYPES.map((type) => (
+                            <option key={type} value={type}>
+                              {MODEL_TYPE_CONFIG[type].emoji}{" "}
+                              {MODEL_TYPE_CONFIG[type].label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
+
+                      {/* 预设模型快速选择 */}
+                      {selectedPreset && selectedPreset.defaultModels && (
+                        <div>
+                          <label className="block text-xs text-text-muted mb-2">
+                            快速选择预设模型
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedPreset.defaultModels.map((m) => (
+                              <button
+                                key={m.name}
+                                onClick={() =>
+                                  setModelForm({
+                                    ...modelForm,
+                                    name: m.name,
+                                    display_name: m.display_name,
+                                    model_type: m.model_type,
+                                  })
+                                }
+                                className="px-3 py-1.5 rounded-lg bg-bg-tertiary text-xs text-text-secondary hover:text-text-primary transition-colors border border-white/5"
+                              >
+                                {MODEL_TYPE_CONFIG[m.model_type].emoji}{" "}
+                                {m.display_name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex gap-3">
                         <button
                           onClick={
-                            editingModel ? handleUpdateModel : handleCreateModel
+                            isCustomProvider
+                              ? handleCreateCustomProviderAndModel
+                              : handleAddModel
                           }
                           disabled={
-                            !modelForm.provider_id ||
                             !modelForm.name.trim() ||
-                            !modelForm.display_name.trim()
+                            !modelForm.display_name.trim() ||
+                            (!isCustomProvider && !modelForm.provider_id)
                           }
                           className="px-4 py-2 rounded-lg bg-accent-primary text-bg-primary text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
                         >
-                          {editingModel ? "保存修改" : "添加模型"}
+                          添加模型
                         </button>
                         <button
-                          onClick={() => {
-                            setShowAddModel(false);
-                            setEditingModel(null);
-                            resetModelForm();
-                          }}
+                          onClick={resetAddModelForm}
                           className="px-4 py-2 rounded-lg bg-bg-tertiary text-text-secondary text-sm hover:text-text-primary transition-colors border border-white/5"
                         >
                           取消
@@ -801,96 +580,113 @@ export default function SettingsPage() {
                   </div>
                 )}
 
-                {/* 模型列表 */}
-                <div className="space-y-3">
-                  {models.filter(
-                    (m) =>
-                      !selectedProviderId ||
-                      m.provider_id === selectedProviderId,
-                  ).length === 0 ? (
-                    <div className="text-center py-12 rounded-2xl bg-bg-tertiary/40 border border-white/5">
-                      <p className="text-4xl mb-3">🤖</p>
-                      <p className="text-text-secondary">暂无模型</p>
-                      <p className="text-xs text-text-muted mt-1">
-                        {providers.length === 0
-                          ? "请先添加模型提供商"
-                          : "点击上方按钮添加模型"}
-                      </p>
-                    </div>
-                  ) : (
-                    models
-                      .filter(
-                        (m) =>
-                          !selectedProviderId ||
-                          m.provider_id === selectedProviderId,
-                      )
-                      .map((model) => {
-                        const provider = providers.find(
-                          (p) => p.id === model.provider_id,
-                        );
-                        return (
-                          <div
-                            key={model.id}
-                            className="rounded-2xl bg-bg-tertiary/40 border border-white/5 p-5"
+                {/* 模型列表 - 按供应商分组 */}
+                {providersWithModels.length === 0 ? (
+                  <div className="text-center py-12 rounded-2xl bg-bg-tertiary/40 border border-white/5">
+                    <p className="text-4xl mb-3">🤖</p>
+                    <p className="text-text-secondary">暂无配置的模型</p>
+                    <p className="text-xs text-text-muted mt-1">
+                      点击上方"添加模型"按钮开始配置
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {providersWithModels.map(({ provider, models: providerModels }) => (
+                      <div
+                        key={provider.id}
+                        className="rounded-2xl bg-bg-tertiary/40 border border-white/5 overflow-hidden"
+                      >
+                        {/* 供应商头部 */}
+                        <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">
+                              {provider.icon || "🏢"}
+                            </span>
+                            <div>
+                              <h3 className="text-base font-semibold text-text-primary">
+                                {provider.display_name}
+                              </h3>
+                              <p className="text-xs text-text-muted">
+                                {provider.provider_type === "cloud"
+                                  ? "云服务商"
+                                  : "本地部署"}
+                                {provider.base_url &&
+                                  ` • ${provider.base_url}`}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setSelectedPreset(
+                                PROVIDER_PRESETS.find(
+                                  (p) => p.name === provider.name
+                                ) || null
+                              );
+                              setModelForm({
+                                ...modelForm,
+                                provider_id: provider.id,
+                              });
+                              setShowAddModel(true);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-secondary hover:text-text-primary transition-colors border border-white/5"
                           >
-                            <div className="flex items-center justify-between">
+                            + 添加模型
+                          </button>
+                        </div>
+
+                        {/* 模型列表 */}
+                        <div className="p-4 space-y-2">
+                          {providerModels.map((model) => (
+                            <div
+                              key={model.id}
+                              className="flex items-center justify-between p-3 rounded-xl bg-bg-secondary/50 border border-white/5"
+                            >
                               <div className="flex items-center gap-3">
-                                <span className="text-2xl">
-                                  {MODEL_TYPE_CONFIG[model.model_type].emoji}
+                                <span className="text-lg">
+                                  {MODEL_TYPE_CONFIG[model.model_type]?.emoji || "🤖"}
                                 </span>
                                 <div>
-                                  <h4 className="text-base font-semibold text-text-primary flex items-center gap-2">
-                                    {model.display_name}
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-text-primary">
+                                      {model.display_name}
+                                    </span>
                                     {model.is_default && (
-                                      <span className="px-2 py-0.5 rounded text-xs bg-accent-primary/20 text-accent-primary border border-accent-primary/30">
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent-primary/20 text-accent-primary border border-accent-primary/30">
                                         默认
                                       </span>
                                     )}
-                                  </h4>
+                                  </div>
                                   <p className="text-xs text-text-muted">
-                                    {provider?.display_name} •{" "}
-                                    {MODEL_TYPE_CONFIG[model.model_type].label}{" "}
-                                    • {model.name}
+                                    {model.name} •{" "}
+                                    {MODEL_TYPE_CONFIG[model.model_type]?.label}
                                   </p>
                                 </div>
                               </div>
-                              <div className="flex gap-2">
+                              <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() =>
-                                    handleToggleModelDefault(model)
-                                  }
-                                  className={`px-3 py-1.5 rounded-lg text-xs transition-colors border ${
+                                  onClick={() => handleToggleDefault(model)}
+                                  className={`px-2 py-1 rounded text-xs transition-colors border ${
                                     model.is_default
                                       ? "bg-accent-primary/20 text-accent-primary border-accent-primary/30"
-                                      : "bg-bg-secondary text-text-secondary hover:text-text-primary border-white/5"
+                                      : "bg-bg-tertiary text-text-muted hover:text-text-secondary border-white/5"
                                   }`}
                                 >
                                   {model.is_default ? "取消默认" : "设为默认"}
                                 </button>
                                 <button
-                                  onClick={() => startEditModel(model)}
-                                  className="px-3 py-1.5 rounded-lg bg-bg-secondary text-xs text-text-secondary hover:text-text-primary transition-colors border border-white/5"
-                                >
-                                  编辑
-                                </button>
-                                <button
                                   onClick={() => handleDeleteModel(model.id)}
-                                  className="px-3 py-1.5 rounded-lg bg-bg-secondary text-xs text-red-400 hover:bg-red-500/10 transition-colors border border-white/5"
+                                  className="px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/10 transition-colors border border-white/5"
                                 >
                                   删除
                                 </button>
                               </div>
                             </div>
-                            {model.description && (
-                              <p className="text-sm text-text-secondary mt-2">
-                                {model.description}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })
-                  )}
-                </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -899,86 +695,57 @@ export default function SettingsPage() {
               <div className="max-w-2xl mx-auto space-y-6">
                 <div className="rounded-2xl bg-bg-tertiary/40 border border-white/5 p-6">
                   <h3 className="text-lg font-semibold text-text-primary mb-6">
-                    默认模型配置
+                    ⭐ 默认模型配置
                   </h3>
                   <p className="text-sm text-text-secondary mb-6">
-                    设置默认的文生图和文生视频模型，创建任务时将自动使用默认模型
+                    设置各类任务的默认模型，创建任务时将自动选中
                   </p>
 
                   <div className="space-y-6">
-                    {/* 默认文生图模型 */}
-                    <div>
-                      <label className="flex items-center gap-2 text-base font-medium text-text-primary mb-3">
-                        <span className="text-xl">
-                          {MODEL_TYPE_CONFIG.text_to_image.emoji}
-                        </span>
-                        默认文生图模型
-                      </label>
-                      <select
-                        value={defaultModels.default_image_model_id || ""}
-                        onChange={async (e) => {
-                          const newDefaults = {
-                            ...defaultModels,
-                            default_image_model_id: e.target.value || undefined,
-                          };
-                          const updated =
-                            await modelService.updateDefaultModels(newDefaults);
-                          setDefaultModels(updated);
-                        }}
-                        className="w-full px-4 py-3 rounded-xl bg-bg-secondary text-sm text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40"
-                      >
-                        <option value="">未设置</option>
-                        {models
-                          .filter((m) => m.model_type === "text_to_image")
-                          .map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {providers.find((p) => p.id === m.provider_id)
-                                ?.icon || ""}{" "}
-                              {m.display_name}
-                            </option>
-                          ))}
-                      </select>
-                      <p className="text-xs text-text-muted mt-2">
-                        当前：{getDefaultModelName("text_to_image")}
-                      </p>
-                    </div>
+                    {DEFAULT_MODEL_TYPES.map((modelType) => {
+                      const config = MODEL_TYPE_CONFIG[modelType];
+                      const defaultId = getDefaultModelId(modelType);
+                      const availableModels = models.filter(
+                        (m) => m.model_type === modelType && m.is_enabled
+                      );
 
-                    {/* 默认文生视频模型 */}
-                    <div>
-                      <label className="flex items-center gap-2 text-base font-medium text-text-primary mb-3">
-                        <span className="text-xl">
-                          {MODEL_TYPE_CONFIG.text_to_video.emoji}
-                        </span>
-                        默认文生视频模型
-                      </label>
-                      <select
-                        value={defaultModels.default_video_model_id || ""}
-                        onChange={async (e) => {
-                          const newDefaults = {
-                            ...defaultModels,
-                            default_video_model_id: e.target.value || undefined,
-                          };
-                          const updated =
-                            await modelService.updateDefaultModels(newDefaults);
-                          setDefaultModels(updated);
-                        }}
-                        className="w-full px-4 py-3 rounded-xl bg-bg-secondary text-sm text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40"
-                      >
-                        <option value="">未设置</option>
-                        {models
-                          .filter((m) => m.model_type === "text_to_video")
-                          .map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {providers.find((p) => p.id === m.provider_id)
-                                ?.icon || ""}{" "}
-                              {m.display_name}
-                            </option>
-                          ))}
-                      </select>
-                      <p className="text-xs text-text-muted mt-2">
-                        当前：{getDefaultModelName("text_to_video")}
-                      </p>
-                    </div>
+                      return (
+                        <div key={modelType}>
+                          <label className="flex items-center gap-2 text-base font-medium text-text-primary mb-3">
+                            <span className="text-xl">{config.emoji}</span>
+                            {config.label}
+                          </label>
+                          <p className="text-xs text-text-muted mb-3">
+                            {config.description}
+                          </p>
+                          <select
+                            value={defaultId}
+                            onChange={(e) =>
+                              handleSetDefault(modelType, e.target.value)
+                            }
+                            className="w-full px-4 py-3 rounded-xl bg-bg-secondary text-sm text-text-primary border border-white/5 focus:outline-none focus:border-accent-primary/40"
+                          >
+                            <option value="">未设置</option>
+                            {availableModels.map((m) => {
+                              const provider = providers.find(
+                                (p) => p.id === m.provider_id
+                              );
+                              return (
+                                <option key={m.id} value={m.id}>
+                                  {provider?.icon || ""} {m.display_name}{" "}
+                                  ({provider?.display_name})
+                                </option>
+                              );
+                            })}
+                          </select>
+                          {availableModels.length === 0 && (
+                            <p className="text-xs text-text-muted mt-2">
+                              暂无可用的{config.label}模型，请先在"模型管理"中添加
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 

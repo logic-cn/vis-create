@@ -24,9 +24,9 @@ import {
   ENVIRONMENT_GROUPS,
 } from "../constants/creation-options";
 
-const TYPE_OPTIONS: { id: CreationType; label: string; emoji: string }[] = [
+const TYPE_OPTIONS: { id: CreationType; label: string; emoji: string; desc?: string }[] = [
   { id: "image", label: "图片", emoji: "🖼️" },
-  { id: "video", label: "视频", emoji: "🎬" },
+  { id: "video", label: "视频", emoji: "🎬", desc: "支持 HappyHorse / Seedance" },
 ];
 
 const SIZE_OPTIONS: {
@@ -360,9 +360,15 @@ export default function CreatorPage() {
                           ? "bg-accent-primary text-bg-primary shadow-lg shadow-accent-primary/30"
                           : "bg-bg-tertiary/80 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
                       }`}
+                      title={opt.desc}
                     >
                       <span className="mr-2">{opt.emoji}</span>
                       {opt.label}
+                      {opt.desc && type === opt.id && (
+                        <span className="ml-2 text-xs opacity-80">
+                          ({opt.desc})
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

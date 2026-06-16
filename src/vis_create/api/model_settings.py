@@ -369,78 +369,62 @@ def delete_model(model_id: str, db: Session = Depends(get_db)):
 @router.get("/default-models", response_model=DefaultModelsResponse)
 def get_default_models(db: Session = Depends(get_db)):
     """获取默认模型配置"""
-    # 查询默认的文生图模型
-    image_result = db.execute(
-        select(Model).where(
-            Model.model_type == "text_to_image",
-            Model.is_default == True,
-            Model.is_enabled == True,
-        )
-    )
-    image_model = image_result.scalar_one_or_none()
+    # 查询各类默认模型
+    defaults = {}
+    model_type_mapping = {
+        "text_generation": "default_text_generation_model_id",
+        "text_to_image": "default_image_model_id",
+        "image_to_image": "default_image_to_image_model_id",
+        "text_to_video": "default_video_model_id",
+        "image_to_video": "default_image_to_video_model_id",
+    }
 
-    # 查询默认的文生视频模型
-    video_result = db.execute(
-        select(Model).where(
-            Model.model_type == "text_to_video",
-            Model.is_default == True,
-            Model.is_enabled == True,
+    for model_type, field_name in model_type_mapping.items():
+        result = db.execute(
+            select(Model).where(
+                Model.model_type == model_type,
+                Model.is_default == True,
+                Model.is_enabled == True,
+            )
         )
-    )
-    video_model = video_result.scalar_one_or_none()
+        model = result.scalar_one_or_none()
+        defaults[field_name] = str(model.id) if model else None
 
-    return DefaultModelsResponse(
-        default_image_model_id=str(image_model.id) if image_model else None,
-        default_video_model_id=str(video_model.id) if video_model else None,
-    )
+    return DefaultModelsResponse(**defaults)
 
 
 @router.put("/default-models", response_model=DefaultModelsResponse)
 def update_default_models(data: DefaultModelsUpdate, db: Session = Depends(get_db)):
     """更新默认模型配置"""
-    # 更新默认文生图模型
-    if data.default_image_model_id is not None:
-        # 取消当前默认
-        db.execute(
-            update(Model)
-            .where(
-                Model.model_type == "text_to_image",
-                Model.is_default == True,
-            )
-            .values(is_default=False)
-        )
-        # 设置新的默认
-        if data.default_image_model_id:
-            model_result = db.execute(
-                select(Model).where(
-                    Model.id == uuid.UUID(data.default_image_model_id)
-                )
-            )
-            model = model_result.scalar_one_or_none()
-            if model:
-                model.is_default = True
+    # 更新各类默认模型
+    model_type_mapping = {
+        "default_text_generation_model_id": "text_generation",
+        "default_image_model_id": "text_to_image",
+        "default_image_to_image_model_id": "image_to_image",
+        "default_video_model_id": "text_to_video",
+        "default_image_to_video_model_id": "image_to_video",
+    }
 
-    # 更新默认文生视频模型
-    if data.default_video_model_id is not None:
-        # 取消当前默认
-        db.execute(
-            update(Model)
-            .where(
-                Model.model_type == "text_to_video",
-                Model.is_default == True,
-            )
-            .values(is_default=False)
-        )
-        # 设置新的默认
-        if data.default_video_model_id:
-            model_result = db.execute(
-                select(Model).where(
-                    Model.id == uuid.UUID(data.default_video_model_id)
+    for field_name, model_type in model_type_mapping.items():
+        model_id = getattr(data, field_name, None)
+        if model_id is not None:
+            # 取消当前默认
+            db.execute(
+                update(Model)
+                .where(
+                    Model.model_type == model_type,
+                    Model.is_default == True,
                 )
+                .values(is_default=False)
             )
-            model = model_result.scalar_one_or_none()
-            if model:
-                model.is_default = True
+            # 设置新的默认
+            if model_id:
+                model_result = db.execute(
+                    select(Model).where(Model.id == uuid.UUID(model_id))
+                )
+                model = model_result.scalar_one_or_none()
+                if model:
+                    model.is_default = True
 
     db.commit()
 

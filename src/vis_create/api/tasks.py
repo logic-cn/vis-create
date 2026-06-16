@@ -220,11 +220,59 @@ async def _process_task(task_id: uuid.UUID) -> None:
                 task.status = TaskStatus.FAILED
                 task.error_message = result.error
                 logger.error("Task %s failed: %s", task_id, result.error)
-        else:
+        elif task.type == "video":
+            # 视频生成
+            from ..generators.video import VideoGenerator
+
+            task.progress = 20.0
+            db.commit()
+
+            async with VideoGenerator(settings) as video_gen:
+                result = await video_gen.generate_async(
+                    prompt=enhanced_prompt,
+                    output_dir=settings.output_dir,
+                    duration=params.get("duration", 5),
+                    resolution=params.get("resolution", "720P"),
+                    ratio=params.get("ratio", "16:9"),
+                )
+
+            # 检查任务是否被取消
             task = db.query(Task).filter(Task.id == task_id).first()
-            if task:
+            if not task or task.status == TaskStatus.FAILED:
+                db.close()
+                return
+
+            if result.success:
+                task.progress = 100.0
+                task.status = TaskStatus.COMPLETED
+                task.completed_at = datetime.now(timezone.utc)
+                params = task.parameters or {}
+                params["output_file"] = result.file_path
+                task.parameters = params
+
+                # 上传到 MinIO
+                object_name = upload_file(result.file_path, prefix="videos/")
+                file_url = get_public_url(object_name)
+                logger.info(
+                    "Video task %s completed, uploaded to MinIO: %s",
+                    task_id,
+                    file_url,
+                )
+
+                # 创建作品记录
+                artwork = Artwork(
+                    title=task.prompt[:100],
+                    type="video",
+                    file_path=file_url,
+                    prompt=task.prompt,
+                    parameters=params,
+                    project_id=task.project_id,
+                )
+                db.add(artwork)
+            else:
                 task.status = TaskStatus.FAILED
-                task.error_message = "视频生成功能尚未实现"
+                task.error_message = result.error
+                logger.error("Video task %s failed: %s", task_id, result.error)
 
         db.commit()
     except Exception as e:

@@ -185,16 +185,18 @@ class ModelListResponse(BaseModel):
 class DefaultModelsResponse(BaseModel):
     """默认模型配置响应"""
 
+    default_text_generation_model_id: Optional[str] = Field(None, description="默认文生文模型ID")
     default_image_model_id: Optional[str] = Field(None, description="默认文生图模型ID")
-    default_video_model_id: Optional[str] = Field(
-        None, description="默认文生视频模型ID"
-    )
+    default_image_to_image_model_id: Optional[str] = Field(None, description="默认图生图模型ID")
+    default_video_model_id: Optional[str] = Field(None, description="默认文生视频模型ID")
+    default_image_to_video_model_id: Optional[str] = Field(None, description="默认图生视频模型ID")
 
 
 class DefaultModelsUpdate(BaseModel):
     """更新默认模型配置"""
 
+    default_text_generation_model_id: Optional[str] = Field(None, description="默认文生文模型ID")
     default_image_model_id: Optional[str] = Field(None, description="默认文生图模型ID")
-    default_video_model_id: Optional[str] = Field(
-        None, description="默认文生视频模型ID"
-    )
+    default_image_to_image_model_id: Optional[str] = Field(None, description="默认图生图模型ID")
+    default_video_model_id: Optional[str] = Field(None, description="默认文生视频模型ID")
+    default_image_to_video_model_id: Optional[str] = Field(None, description="默认图生视频模型ID")

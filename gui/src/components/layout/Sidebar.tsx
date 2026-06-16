@@ -6,7 +6,7 @@ const navItems = [
   { path: "/create", label: "创作工作台", icon: "✨" },
   { path: "/projects", label: "项目管理", icon: "📂" },
   { path: "/tasks", label: "任务队列", icon: "📋" },
-  { path: "/settings", label: "设置", icon: "⚙️" },
+  { path: "/settings", label: "模型设置", icon: "⚙️" },
 ];
 
 export default function Sidebar() {

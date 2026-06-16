@@ -3,9 +3,10 @@
  */
 
 export type ModelType =
+  | "text_generation"
   | "text_to_image"
-  | "text_to_video"
   | "image_to_image"
+  | "text_to_video"
   | "image_to_video";
 
 export type ProviderType = "cloud" | "local";
@@ -88,108 +89,104 @@ export interface ModelListResponse {
 }
 
 export interface DefaultModels {
+  default_text_generation_model_id?: string;
   default_image_model_id?: string;
+  default_image_to_image_model_id?: string;
   default_video_model_id?: string;
+  default_image_to_video_model_id?: string;
 }
 
 export interface DefaultModelsUpdateParams {
+  default_text_generation_model_id?: string;
   default_image_model_id?: string;
+  default_image_to_image_model_id?: string;
   default_video_model_id?: string;
+  default_image_to_video_model_id?: string;
 }
 
-// 预定义的云服务商提供商
-export const CLOUD_PROVIDERS: ModelProviderCreateParams[] = [
+// 内置供应商预设
+export interface ProviderPreset {
+  name: string;
+  display_name: string;
+  provider_type: ProviderType;
+  icon: string;
+  description: string;
+  base_url?: string;
+  defaultModels?: { name: string; display_name: string; model_type: ModelType }[];
+}
+
+export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
     name: "openai",
     display_name: "OpenAI",
     provider_type: "cloud",
     icon: "🤖",
-    description: "DALL-E 系列文生图模型",
+    description: "GPT-4、DALL-E、Whisper 等",
+    defaultModels: [
+      { name: "gpt-4-turbo-preview", display_name: "GPT-4 Turbo", model_type: "text_generation" },
+      { name: "gpt-4o", display_name: "GPT-4o", model_type: "text_generation" },
+      { name: "dall-e-3", display_name: "DALL-E 3", model_type: "text_to_image" },
+      { name: "dall-e-2", display_name: "DALL-E 2", model_type: "text_to_image" },
+    ],
   },
   {
-    name: "stability",
-    display_name: "Stability AI",
+    name: "aliyun",
+    display_name: "阿里云百炼",
     provider_type: "cloud",
-    icon: "🎨",
-    description: "Stable Diffusion 系列模型",
+    icon: "☁️",
+    description: "通义千问、HappyHorse 视频生成",
+    defaultModels: [
+      { name: "qwen-turbo", display_name: "通义千问 Turbo", model_type: "text_generation" },
+      { name: "qwen-plus", display_name: "通义千问 Plus", model_type: "text_generation" },
+      { name: "happyhorse-1.0-t2v", display_name: "HappyHorse 文生视频", model_type: "text_to_video" },
+    ],
   },
   {
-    name: "midjourney",
-    display_name: "Midjourney",
+    name: "volcengine",
+    display_name: "火山引擎",
     provider_type: "cloud",
-    icon: "🌄",
-    description: "Midjourney 文生图模型",
-  },
-  {
-    name: "runway",
-    display_name: "Runway",
-    provider_type: "cloud",
-    icon: "🎬",
-    description: "Gen-1/Gen-2 视频生成模型",
-  },
-  {
-    name: "pika",
-    display_name: "Pika Labs",
-    provider_type: "cloud",
-    icon: "⚡",
-    description: "Pika 视频生成模型",
-  },
-  {
-    name: "kling",
-    display_name: "可灵 AI",
-    provider_type: "cloud",
-    icon: "🐉",
-    description: "快手可灵视频生成模型",
+    icon: "🌋",
+    description: "豆包、Seedance 视频生成",
+    defaultModels: [
+      { name: "doubao-pro", display_name: "豆包 Pro", model_type: "text_generation" },
+      { name: "seedance-2.0", display_name: "Seedance 2.0", model_type: "text_to_video" },
+    ],
   },
   {
     name: "zhipu",
     display_name: "智谱 AI",
     provider_type: "cloud",
     icon: "🔮",
-    description: "智谱 CogView 文生图模型",
-  },
-  {
-    name: "baidu",
-    display_name: "百度文心",
-    provider_type: "cloud",
-    icon: "🐻",
-    description: "文心一格文生图模型",
-  },
-];
-
-// 预定义的本地部署提供商
-export const LOCAL_PROVIDERS: ModelProviderCreateParams[] = [
-  {
-    name: "ollama",
-    display_name: "Ollama",
-    provider_type: "local",
-    base_url: "http://localhost:11434",
-    icon: "🦙",
-    description: "本地运行的开源模型",
-  },
-  {
-    name: "lmstudio",
-    display_name: "LM Studio",
-    provider_type: "local",
-    base_url: "http://localhost:1234",
-    icon: "🖥️",
-    description: "本地运行的 LLM 模型",
+    description: "GLM、CogView、CogVideo",
+    defaultModels: [
+      { name: "glm-4", display_name: "GLM-4", model_type: "text_generation" },
+      { name: "cogview-3", display_name: "CogView 3", model_type: "text_to_image" },
+      { name: "cogvideox", display_name: "CogVideoX", model_type: "text_to_video" },
+    ],
   },
   {
     name: "comfyui",
     display_name: "ComfyUI",
     provider_type: "local",
-    base_url: "http://localhost:8188",
     icon: "🎨",
-    description: "本地运行的 Stable Diffusion",
+    description: "本地 Stable Diffusion 工作流",
+    base_url: "http://localhost:8188",
   },
   {
-    name: "automatic1111",
-    display_name: "Stable Diffusion WebUI",
+    name: "lmstudio",
+    display_name: "LM Studio",
     provider_type: "local",
-    base_url: "http://localhost:7860",
-    icon: "🖼️",
-    description: "Automatic1111 WebUI",
+    icon: "🖥️",
+    description: "本地运行的 LLM 模型",
+    base_url: "http://localhost:1234",
+  },
+  {
+    name: "ollama",
+    display_name: "Ollama",
+    provider_type: "local",
+    icon: "🦙",
+    description: "本地运行的开源模型",
+    base_url: "http://localhost:11434",
   },
 ];
 
@@ -198,20 +195,25 @@ export const MODEL_TYPE_CONFIG: Record<
   ModelType,
   { label: string; emoji: string; description: string }
 > = {
+  text_generation: {
+    label: "文生文",
+    emoji: "💬",
+    description: "文本对话、文本生成",
+  },
   text_to_image: {
     label: "文生图",
     emoji: "🖼️",
     description: "根据文本描述生成图片",
   },
-  text_to_video: {
-    label: "文生视频",
-    emoji: "🎬",
-    description: "根据文本描述生成视频",
-  },
   image_to_image: {
     label: "图生图",
     emoji: "🔄",
     description: "根据参考图片生成新图片",
+  },
+  text_to_video: {
+    label: "文生视频",
+    emoji: "🎬",
+    description: "根据文本描述生成视频",
   },
   image_to_video: {
     label: "图生视频",
@@ -219,3 +221,12 @@ export const MODEL_TYPE_CONFIG: Record<
     description: "根据图片生成视频",
   },
 };
+
+// 默认模型类型列表
+export const DEFAULT_MODEL_TYPES: ModelType[] = [
+  "text_generation",
+  "text_to_image",
+  "image_to_image",
+  "text_to_video",
+  "image_to_video",
+];

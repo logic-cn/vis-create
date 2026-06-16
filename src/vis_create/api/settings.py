@@ -24,8 +24,20 @@ DEFAULT_SETTINGS = {
         "default": "gpt-4-turbo-preview",
         "description": "OpenAI模型名称",
     },
+    "video_provider": {
+        "default": "happyhorse",
+        "description": "视频生成提供商 (happyhorse, seedance)",
+    },
+    "video_api_key": {
+        "default": "",
+        "description": "视频生成API密钥",
+    },
+    "video_api_endpoint": {
+        "default": "",
+        "description": "视频生成API端点",
+    },
     "video_model": {
-        "default": "gen-2",
+        "default": "happyhorse-1.0-t2v",
         "description": "视频生成模型名称",
     },
     "output_dir": {
@@ -47,6 +59,9 @@ class SettingsResponse(BaseModel):
     """设置响应"""
 
     openai_model: str
+    video_provider: str
+    video_api_key: str
+    video_api_endpoint: str
     video_model: str
     output_dir: str
     verbose: bool
@@ -57,6 +72,9 @@ class SettingsUpdate(BaseModel):
     """设置更新请求"""
 
     openai_model: str | None = None
+    video_provider: str | None = None
+    video_api_key: str | None = None
+    video_api_endpoint: str | None = None
     video_model: str | None = None
     output_dir: str | None = None
     verbose: bool | None = None
@@ -103,6 +121,9 @@ def get_settings(db: Session = Depends(get_db)):
     """获取设置"""
     return SettingsResponse(
         openai_model=_get_setting(db, "openai_model"),
+        video_provider=_get_setting(db, "video_provider"),
+        video_api_key=_get_setting(db, "video_api_key"),
+        video_api_endpoint=_get_setting(db, "video_api_endpoint"),
         video_model=_get_setting(db, "video_model"),
         output_dir=_get_setting(db, "output_dir"),
         verbose=_get_setting(db, "verbose").lower() == "true",
@@ -115,6 +136,12 @@ def update_settings(data: SettingsUpdate, db: Session = Depends(get_db)):
     """更新设置（持久化到数据库）"""
     if data.openai_model is not None:
         _set_setting(db, "openai_model", data.openai_model)
+    if data.video_provider is not None:
+        _set_setting(db, "video_provider", data.video_provider)
+    if data.video_api_key is not None:
+        _set_setting(db, "video_api_key", data.video_api_key)
+    if data.video_api_endpoint is not None:
+        _set_setting(db, "video_api_endpoint", data.video_api_endpoint)
     if data.video_model is not None:
         _set_setting(db, "video_model", data.video_model)
     if data.output_dir is not None:
@@ -129,6 +156,9 @@ def update_settings(data: SettingsUpdate, db: Session = Depends(get_db)):
 
     return SettingsResponse(
         openai_model=_get_setting(db, "openai_model"),
+        video_provider=_get_setting(db, "video_provider"),
+        video_api_key=_get_setting(db, "video_api_key"),
+        video_api_endpoint=_get_setting(db, "video_api_endpoint"),
         video_model=_get_setting(db, "video_model"),
         output_dir=_get_setting(db, "output_dir"),
         verbose=_get_setting(db, "verbose").lower() == "true",
@@ -146,9 +176,12 @@ def test_api_connection(data: ApiTestRequest):
             return ApiTestResponse(success=True, message="OpenAI API key configured")
         return ApiTestResponse(success=False, message="OpenAI API key not configured")
 
-    if data.provider == "video":
+    if data.provider in ("video", "happyhorse", "seedance"):
         if settings.video_api_key:
-            return ApiTestResponse(success=True, message="Video API key configured")
+            return ApiTestResponse(
+                success=True,
+                message=f"Video API key configured (provider: {settings.video_provider})",
+            )
         return ApiTestResponse(success=False, message="Video API key not configured")
 
     if data.provider == "stability":

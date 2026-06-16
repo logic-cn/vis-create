@@ -28,18 +28,20 @@ class Settings(BaseModel):
     )
 
     # 视频生成API配置
+    video_provider: str = Field(
+        default_factory=lambda: os.getenv("VIDEO_PROVIDER", "happyhorse"),
+        description="视频生成提供商 (happyhorse, seedance)",
+    )
     video_api_key: Optional[str] = Field(
         default_factory=lambda: os.getenv("VIDEO_API_KEY"),
         description="视频生成API密钥",
     )
-    video_api_endpoint: str = Field(
-        default_factory=lambda: os.getenv(
-            "VIDEO_API_ENDPOINT", "https://api.runway.com/v1/generate"
-        ),
-        description="视频生成API端点",
+    video_api_endpoint: Optional[str] = Field(
+        default_factory=lambda: os.getenv("VIDEO_API_ENDPOINT"),
+        description="视频生成API端点（可选，使用默认值）",
     )
     video_model: str = Field(
-        default_factory=lambda: os.getenv("VIDEO_MODEL", "gen-2"),
+        default_factory=lambda: os.getenv("VIDEO_MODEL", "happyhorse-1.0-t2v"),
         description="视频生成模型名称",
     )
 
