@@ -28,10 +28,11 @@ export default function GalleryPage() {
     try {
       const params: Record<string, string | number | boolean> = {
         limit: 100,
-        sort: showFavorites ? "is_favorite" : sort,
+        sort: sort,
       };
       if (typeFilter) params.type = typeFilter;
       if (search) params.search = search;
+      if (showFavorites) params.is_favorite = true;
 
       const response = await artworkService.list(params);
       setArtworks(response.data);

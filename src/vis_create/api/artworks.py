@@ -30,6 +30,7 @@ def list_artworks(
     character_id: Optional[str] = Query(None, description="按角色ID筛选"),
     chapter_id: Optional[str] = Query(None, description="按章节ID筛选"),
     scene_id: Optional[str] = Query(None, description="按场景ID筛选"),
+    is_favorite: Optional[bool] = Query(None, description="按收藏状态筛选"),
     sort: str = Query("created_at", pattern="^(created_at|title|is_favorite)$"),
     search: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -40,6 +41,8 @@ def list_artworks(
     # 筛选
     if type:
         query = query.filter(Artwork.type == type)
+    if is_favorite is not None:
+        query = query.filter(Artwork.is_favorite == is_favorite)
     if style:
         query = query.filter(Artwork.style == style)
     if project_id:

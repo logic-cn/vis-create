@@ -25,6 +25,8 @@ export const artworkService = {
     if (params?.style) queryParams.append("style", params.style);
     if (params?.sort) queryParams.append("sort", params.sort);
     if (params?.search) queryParams.append("search", params.search);
+    if (params?.is_favorite !== undefined)
+      queryParams.append("is_favorite", String(params.is_favorite));
     return api.get<ArtworkListResponse>(`/api/artworks?${queryParams}`);
   },
 
