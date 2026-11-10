@@ -37,16 +37,16 @@ class TestPromptBuilder:
         params = {
             "style": "anime",
             "photography": {
-                "lighting": "golden_hour",
-                "lens": "wide_angle",
+                "lighting": "golden-hour",
+                "lens": "wide-angle",
             },
             "subject": {
                 "type": "person",
-                "emotion": "happy",
+                "emotion": "joyful",
             },
             "environment": {
                 "weather": "sunny",
-                "time_of_day": "sunset",
+                "timeOfDay": "dusk",
             },
         }
         result = builder.build(
@@ -57,8 +57,9 @@ class TestPromptBuilder:
         assert "golden hour" in result
         assert "wide angle" in result
         assert "person" in result
+        assert "happy expression" in result
         assert "sunny" in result
-        assert "sunset" in result
+        assert "dusk" in result
 
     def test_empty_parameters(self, builder: PromptBuilder) -> None:
         """测试空参数"""
@@ -73,7 +74,7 @@ class TestPromptBuilder:
         params = {
             "style": "realistic",
             "subject": {
-                "detail_level": "high",
+                "detail": "detailed",
             },
         }
         result = builder.build(

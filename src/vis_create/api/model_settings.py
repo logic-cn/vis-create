@@ -13,8 +13,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
-
 from ..database.connection import get_db
 from ..models.model_provider import (
     DefaultModelsResponse,
@@ -32,8 +30,28 @@ from ..models.model_provider import (
     ModelUpdate,
     ProviderType,
 )
+from .masking import is_masked_secret, mask_secret
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _provider_response(provider: ModelProvider) -> ModelProviderResponse:
+    """构造提供商响应，api_key 始终脱敏，绝不回传明文。"""
+    return ModelProviderResponse(
+        id=str(provider.id),
+        name=provider.name,
+        display_name=provider.display_name,
+        provider_type=provider.provider_type,
+        base_url=provider.base_url,
+        api_key=mask_secret(provider.api_key),
+        description=provider.description,
+        icon=provider.icon,
+        is_enabled=provider.is_enabled,
+        created_at=provider.created_at,
+        updated_at=provider.updated_at,
+    )
 
 
 # ── 模型提供商 CRUD ──
@@ -53,23 +71,8 @@ def list_providers(
     result = db.execute(query)
     providers = result.scalars().all()
 
-    # 转换 UUID 为字符串
-    provider_list = []
-    for p in providers:
-        provider_dict = {
-            "id": str(p.id),
-            "name": p.name,
-            "display_name": p.display_name,
-            "provider_type": p.provider_type,
-            "base_url": p.base_url,
-            "api_key": p.api_key,
-            "description": p.description,
-            "icon": p.icon,
-            "is_enabled": p.is_enabled,
-            "created_at": p.created_at,
-            "updated_at": p.updated_at,
-        }
-        provider_list.append(ModelProviderResponse(**provider_dict))
+    # 转换 UUID 为字符串（api_key 脱敏，绝不回传明文）
+    provider_list = [_provider_response(p) for p in providers]
 
     return ModelProviderListResponse(
         data=provider_list,
@@ -86,25 +89,16 @@ def get_provider(provider_id: str, db: Session = Depends(get_db)):
     provider = result.scalar_one_or_none()
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
-    return ModelProviderResponse(
-        id=str(provider.id),
-        name=provider.name,
-        display_name=provider.display_name,
-        provider_type=provider.provider_type,
-        base_url=provider.base_url,
-        api_key=provider.api_key,
-        description=provider.description,
-        icon=provider.icon,
-        is_enabled=provider.is_enabled,
-        created_at=provider.created_at,
-        updated_at=provider.updated_at,
-    )
+    return _provider_response(provider)
 
 
 @router.post("/providers", response_model=ModelProviderResponse)
 def create_provider(data: ModelProviderCreate, db: Session = Depends(get_db)):
     """创建模型提供商"""
-    logger.debug("Received data: %s", data.model_dump())
+    logger.debug(
+        "Received data: %s",
+        {**data.model_dump(exclude={"api_key"}), "api_key": "***"},
+    )
     try:
         # 检查名称是否重复
         existing = db.execute(
@@ -120,19 +114,7 @@ def create_provider(data: ModelProviderCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(provider)
         logger.debug("Provider created: %s", provider.id)
-        return ModelProviderResponse(
-            id=str(provider.id),
-            name=provider.name,
-            display_name=provider.display_name,
-            provider_type=provider.provider_type,
-            base_url=provider.base_url,
-            api_key=provider.api_key,
-            description=provider.description,
-            icon=provider.icon,
-            is_enabled=provider.is_enabled,
-            created_at=provider.created_at,
-            updated_at=provider.updated_at,
-        )
+        return _provider_response(provider)
     except HTTPException:
         raise
     except Exception as e:
@@ -158,24 +140,15 @@ def update_provider(
         raise HTTPException(status_code=404, detail="Provider not found")
 
     update_data = data.model_dump(exclude_unset=True)
+    # 前端把 GET 返回的脱敏占位值原样回传时，保留数据库中的真实密钥
+    if is_masked_secret(update_data.get("api_key")):
+        update_data.pop("api_key")
     for key, value in update_data.items():
         setattr(provider, key, value)
 
     db.commit()
     db.refresh(provider)
-    return ModelProviderResponse(
-        id=str(provider.id),
-        name=provider.name,
-        display_name=provider.display_name,
-        provider_type=provider.provider_type,
-        base_url=provider.base_url,
-        api_key=provider.api_key,
-        description=provider.description,
-        icon=provider.icon,
-        is_enabled=provider.is_enabled,
-        created_at=provider.created_at,
-        updated_at=provider.updated_at,
-    )
+    return _provider_response(provider)
 
 
 @router.delete("/providers/{provider_id}")

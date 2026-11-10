@@ -8,18 +8,18 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+/build/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -114,20 +114,17 @@ gui/dist/
 gui/src-tauri/target/
 
 # Tauri
-gui/src-tauri/icons/*.png
-gui/src-tauri/icons/*.ico
-gui/src-tauri/icons/*.icns
+# 注意：gui/src-tauri/icons/*.png|*.ico|*.icns 必须入库，否则新克隆无法构建 Tauri 应用，
+#       因此这里不再忽略 icons 目录（仅忽略自动生成的 gen/）。
 gui/src-tauri/gen/
-gui/src-tauri/Cargo.lock
+# 注意：gui/src-tauri/Cargo.lock 必须入库，以保证 Rust 依赖可复现，故不忽略。
 
-# Node.js lock files (if not needed)
-gui/package-lock.json
+# 注意：gui/package-lock.json 必须入库，以保证前端依赖可复现，故不忽略。
 
 # Claude worktrees
 .claude/worktrees/
 
-# uv lock file
-uv.lock
+# 注意：uv.lock 必须入库，以保证 Python 依赖可复现，故不忽略。
 
 # Accidental nested gui directory
 gui/gui/

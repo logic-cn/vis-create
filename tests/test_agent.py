@@ -20,8 +20,11 @@ def mock_settings():
 
 @pytest.fixture
 def agent(mock_settings):
-    """创建Agent实例"""
-    with patch("vis_create.agent.core.ChatOpenAI"):
+    """创建Agent实例（生成器使用 mock，避免真实网络客户端与 API 密钥依赖）"""
+    with (
+        patch("vis_create.agent.core.ImageGenerator"),
+        patch("vis_create.agent.core.VideoGenerator"),
+    ):
         return VisCreateAgent(settings=mock_settings)
 
 

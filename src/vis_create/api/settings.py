@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from ..config.settings import Settings
 from ..database.connection import get_db
 from ..models.setting import SystemSetting
+from .masking import is_masked_secret, mask_secret
 
 logger = logging.getLogger(__name__)
 
@@ -56,11 +57,11 @@ DEFAULT_SETTINGS = {
 
 
 class SettingsResponse(BaseModel):
-    """设置响应"""
+    """设置响应（密钥字段始终脱敏，绝不回传明文）"""
 
     openai_model: str
     video_provider: str
-    video_api_key: str
+    video_api_key: str | None
     video_api_endpoint: str
     video_model: str
     output_dir: str
@@ -118,11 +119,11 @@ def _set_setting(db: Session, key: str, value: str, description: str | None = No
 
 @router.get("", response_model=SettingsResponse)
 def get_settings(db: Session = Depends(get_db)):
-    """获取设置"""
+    """获取设置（video_api_key 脱敏返回，不回传明文）"""
     return SettingsResponse(
         openai_model=_get_setting(db, "openai_model"),
         video_provider=_get_setting(db, "video_provider"),
-        video_api_key=_get_setting(db, "video_api_key"),
+        video_api_key=mask_secret(_get_setting(db, "video_api_key")),
         video_api_endpoint=_get_setting(db, "video_api_endpoint"),
         video_model=_get_setting(db, "video_model"),
         output_dir=_get_setting(db, "output_dir"),
@@ -138,7 +139,8 @@ def update_settings(data: SettingsUpdate, db: Session = Depends(get_db)):
         _set_setting(db, "openai_model", data.openai_model)
     if data.video_provider is not None:
         _set_setting(db, "video_provider", data.video_provider)
-    if data.video_api_key is not None:
+    # 前端把 GET 返回的脱敏占位值原样回传时，保留数据库中的真实密钥
+    if data.video_api_key is not None and not is_masked_secret(data.video_api_key):
         _set_setting(db, "video_api_key", data.video_api_key)
     if data.video_api_endpoint is not None:
         _set_setting(db, "video_api_endpoint", data.video_api_endpoint)
@@ -157,7 +159,7 @@ def update_settings(data: SettingsUpdate, db: Session = Depends(get_db)):
     return SettingsResponse(
         openai_model=_get_setting(db, "openai_model"),
         video_provider=_get_setting(db, "video_provider"),
-        video_api_key=_get_setting(db, "video_api_key"),
+        video_api_key=mask_secret(_get_setting(db, "video_api_key")),
         video_api_endpoint=_get_setting(db, "video_api_endpoint"),
         video_model=_get_setting(db, "video_model"),
         output_dir=_get_setting(db, "output_dir"),

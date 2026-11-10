@@ -22,12 +22,34 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS配置
+# CORS配置：默认仅允许本地前端/桌面端来源，可用 CORS_ALLOW_ORIGINS 覆盖
+# （逗号分隔）。绝不能使用 "*" 搭配 allow_credentials=True：浏览器规范下
+# 该组合无效，且会让任意网页读取本地数据库中的密钥。
+DEFAULT_CORS_ALLOW_ORIGINS = [
+    "http://localhost:1420",
+    "http://127.0.0.1:1420",
+    "tauri://localhost",
+    "http://tauri.localhost",
+]
+
+
+def _resolve_cors_allow_origins() -> list[str]:
+    """解析允许的跨域来源：环境变量优先，否则使用本地来源白名单。"""
+    raw = os.getenv("CORS_ALLOW_ORIGINS", "")
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    if "*" in origins:
+        raise RuntimeError(
+            "CORS_ALLOW_ORIGINS 不允许包含 '*'，请显式列出允许的来源，"
+            "例如 http://localhost:1420"
+        )
+    return origins or list(DEFAULT_CORS_ALLOW_ORIGINS)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应该限制
+    allow_origins=_resolve_cors_allow_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

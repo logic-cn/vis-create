@@ -90,7 +90,7 @@ export default function PreviewModal({
     const tags: { emoji: string; label: string }[] = [];
 
     // 遍历参数分类
-    for (const [catKey, catLabel] of Object.entries(PARAM_CATEGORY_LABELS)) {
+    for (const catKey of Object.keys(PARAM_CATEGORY_LABELS)) {
       const group = params[catKey] as Record<string, string> | undefined;
       if (!group || typeof group !== "object") continue;
       for (const [groupId, optionId] of Object.entries(group)) {
